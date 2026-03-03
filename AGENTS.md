@@ -17,7 +17,7 @@
 - 목적: 수원대학교 포털/학사 시스템에서 학생 정보, 수강 정보, 성적 정보를 크롤링해 API로 제공
 - 런타임: Node.js + TypeScript + Express + Playwright
 - 배포: Docker 이미지 빌드 후 Amazon ECS(Fargate) 배포
-- 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`) 실행
+- 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`)에서 워커 이미지(ECR) 배포
 
 ## 3) 현재 저장소 구조(핵심)
 - `src/worker.ts`: ECS RunTask 비동기 워커 엔트리포인트
@@ -31,18 +31,18 @@
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
-- `.github/workflows/deploy.yml`: ECR 이미지 푸시 + ECS 서비스 배포
+- `.github/workflows/deploy.yml`: ECR 이미지 배포 + IaC 전달용 IMAGE_URI 출력/아티팩트
 - `task-definition.json`: ECS task 정의
 - `layer/nodejs/*`, `.serverless/*`: Lambda/Serverless 관련 산출물/의존성(현재 ECS 배포와 별도 히스토리 영역)
 
 ## 4) 개발/실행 명령어
-- 의존성 설치: `yarn install`
+- 의존성 설치: `yarn install` (또는 `npm install`)
 - 개발 실행(워커): `yarn dev` 또는 `yarn dev:worker`
 - 개발 실행(legacy 서버): `yarn dev:server`
-- 빌드: `yarn build`
+- 빌드: `yarn build` (또는 `npm run build`)
 - 운영 실행(워커, 빌드 후): `yarn start`
 - 운영 실행(legacy 서버): `yarn start:server`
-- 테스트: `yarn test`
+- 테스트: `yarn test` (또는 `npm run test`)
 
 ## 5) 구현 규칙
 - API/비즈니스 로직 변경은 `src/*` 기준으로 수행한다.
@@ -55,10 +55,9 @@
 - 타입 변경 시 관련 DTO, 서비스, 엔드포인트 응답 구조를 함께 맞춘다.
 
 ## 6) 배포 관련 주의사항
-- ECS 배포 파이프라인은 `main` push 트리거다.
-- 아래 값은 서로 일치해야 한다.
-  - workflow env: `ECS_SERVICE`, `ECS_CLUSTER`, `CONTAINER_NAME`, `TASK_DEFINITION_FAMILY`
-  - `task-definition.json`의 `family`, `containerDefinitions[].name`
+- 워커 배포 파이프라인은 `main` push 트리거다.
+- `.github/workflows/deploy.yml`는 ECS 서비스 업데이트를 수행하지 않는다.
+- CI가 출력한 `IMAGE_URI`를 IaC(Terraform) 단계에서 `task-definition.json`의 `${IMAGE_URI}`에 반영해야 한다.
 - Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.
 
 ## 7) 변경 후 double check 체크리스트

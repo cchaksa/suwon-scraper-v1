@@ -53,6 +53,13 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `WORKER_GRACEFUL_SHUTDOWN_MS` (기본 10000)
 - `PORTAL_TIMEOUT_MS` (기본 60000)
 
+### 배포 파이프라인
+- GitHub Actions는 워커 이미지를 ECR에 배포하는 역할만 수행한다.
+- ECS 서비스 업데이트는 수행하지 않는다.
+- CI는 `IMAGE_URI`를 Job output/Artifact(`worker-image-uri/image-uri.txt`)/Job Summary로 남긴다.
+- `task-definition.json`의 이미지 필드는 `${IMAGE_URI}`를 사용한다.
+- IaC(Terraform) 단계에서 `${IMAGE_URI}`에 CI 결과값을 반영해 ECS RunTask에 적용한다.
+
 
 
 

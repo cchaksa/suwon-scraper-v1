@@ -20,9 +20,14 @@
 - 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`) 실행
 
 ## 3) 현재 저장소 구조(핵심)
-- `src/server.ts`: Express 엔트리포인트(`/auth`, `/scrape`, `/health`), 브라우저 lifecycle 관리
+- `src/worker.ts`: ECS RunTask 비동기 워커 엔트리포인트
+- `src/server.ts`: legacy Express 엔트리포인트(`/auth`, `/scrape`, `/health`)
 - `src/crawlers/*`: 학생/수강/성적 크롤링 API 호출
+- `src/services/scrapeJob.ts`: 워커/legacy 서버 공용 스크래핑 코어 로직
+- `src/services/callbackClient.ts`: 내부 콜백 API 전송(HMAC/재시도)
+- `src/services/payloadValidator.ts`: 워커 입력 스키마 검증
 - `src/services/merge.ts`: 성적(Credit) + 수강(Course) 학기별 병합
+- `src/tests/*`: 워커/콜백/에러 분류 테스트
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
@@ -32,9 +37,12 @@
 
 ## 4) 개발/실행 명령어
 - 의존성 설치: `yarn install`
-- 개발 실행: `yarn dev`
+- 개발 실행(워커): `yarn dev` 또는 `yarn dev:worker`
+- 개발 실행(legacy 서버): `yarn dev:server`
 - 빌드: `yarn build`
-- 운영 실행(빌드 후): `yarn start`
+- 운영 실행(워커, 빌드 후): `yarn start`
+- 운영 실행(legacy 서버): `yarn start:server`
+- 테스트: `yarn test`
 
 ## 5) 구현 규칙
 - API/비즈니스 로직 변경은 `src/*` 기준으로 수행한다.

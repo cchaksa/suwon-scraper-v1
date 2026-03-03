@@ -10,7 +10,7 @@
 
 ## 목표
 - 스크래핑 서버 코드를 HTTP 서버 중심 구조에서 비동기 워커 실행 구조로 전환한다.
-- SQS 메시지 입력 검증, 결과 콜백 전송, 에러 분류, 재시도 친화성, idempotency, 로그/관측성을 확보한다.
+- SQS 메시지 입력 검증, 결과 콜백 전송, 에러 분류, 재시도 친화성, 로그/관측성을 확보한다.
 - 기존 스크래핑 기능 결과(성공/실패 분기, 데이터 형태, 에러 의미)는 변경하지 않는다.
 
 ## 핵심 제약 (최우선)
@@ -30,7 +30,7 @@
   - 결과 콜백(`POST /internal/scrape-results`) 전송
   - HMAC 서명 헤더 생성
   - 에러코드 표준화, retryable 분류, timeout/cancel 처리
-  - idempotency 최소 단락 로직
+  - idempotency 책임 경계 명시(워커 무상태 + 백엔드 상태 전이 보장)
   - 테스트 코드 추가/보강
 - 제외:
   - ECS 태스크 정의, 네트워크, IAM, SQS 인프라 리소스 수정
@@ -54,8 +54,9 @@
 ### 1) 워커 실행 모델
 - HTTP 서버 대기 방식은 기본 실행 경로에서 제거한다.
 - 신규 워커 엔트리포인트(`src/worker.ts`)를 추가하고, 1회 실행 후 프로세스 종료한다.
-- 입력 payload는 SQS 메시지 body(JSON)를 기준으로 파싱한다.
-- 로컬/테스트를 위해 raw payload 문자열 주입 함수(`runWorker(rawMessage: string)`)를 분리한다.
+- 운영 입력 payload는 EventBridge Pipe target transform + ECS container override를 통해 주입되는 `SQS_MESSAGE_BODY`를 기준으로 파싱한다.
+- 로컬/테스트를 위해 `argv[2]` fallback을 제공한다.
+- `NODE_ENV=production`에서 `SQS_MESSAGE_BODY` 미존재 시 오배포로 간주하고 실패 종료한다.
 
 ### 2) 입력 스키마
 - 표준 입력 타입:
@@ -93,12 +94,9 @@
 - 비밀키는 환경변수에서 로드한다.
 
 ### 5) idempotency
-- 동일 `job_id` 중복 실행 방지 단락을 워커 시작 시점에 배치한다.
-- 최소 구현:
-  - idempotency 저장소 인터페이스 도입(`get(jobId)`, `setStarted`, `setFinished`)
-  - 기본 구현은 파일/인메모리 기반(테스트용)
-  - 운영 저장소는 외부 의존(예: Redis/DynamoDB)로 교체 가능하도록 추상화
-- 이미 완료된 `job_id`는 크롤링/콜백을 재실행하지 않고 skip 로그 후 종료한다.
+- idempotency 책임은 백엔드 job 상태 전이(DB 원자 업데이트)로 일원화한다.
+- 워커는 DB 직접 연결 없이 무상태(stateless)로 동작한다.
+- 중복 콜백 판정은 백엔드 응답(`2xx` 또는 `409`)으로 처리한다.
 
 ### 6) 에러 분류 표준
 - retryable=true
@@ -115,9 +113,11 @@
 
 ### 7) timeout/cancel
 - 전체 작업 타임아웃(`WORKER_TOTAL_TIMEOUT_MS`)과 포털 호출 타임아웃(`PORTAL_TIMEOUT_MS`)을 분리한다.
+- `SIGTERM`/`SIGINT` 핸들러를 등록하고 graceful shutdown 타임아웃(`WORKER_GRACEFUL_SHUTDOWN_MS`)을 둔다.
 - 타임아웃 또는 취소 발생 시:
   - 브라우저/컨텍스트/페이지 정리
-  - 실패 콜백 전송 보장(가능한 범위)
+  - 결과가 확정되고 `job_id`가 유효하면 종료 전 마지막 콜백 1회 시도
+  - `job_id` 누락/무효인 INVALID_PAYLOAD는 콜백 없이 구조화 로그 후 종료
 
 ### 8) 관측성/로그
 - 모든 로그 필드에 `job_id` 포함
@@ -133,7 +133,7 @@
 2. 입력/출력 DTO 및 스키마 검증 유틸 추가
 3. 에러코드/에러타입 분류 모듈 추가
 4. 콜백 클라이언트(HMAC 서명 포함) 추가
-5. idempotency 저장소 인터페이스 및 기본 구현 추가
+5. 재시도 책임 경계(콜백 재시도 vs 백엔드 재큐잉) 반영
 6. timeout/cancel 처리 및 자원 정리 보강
 7. 로거 개선(`job_id`, `duration_ms`, 민감정보 마스킹)
 8. 테스트 케이스 구현 및 회귀 점검
@@ -146,12 +146,16 @@
   - 유효 payload 입력 시 succeeded 콜백 1회 전송
 - 입력 스키마 오류:
   - INVALID_PAYLOAD + retryable=false 반환
+- `job_id` 누락/무효:
+  - 실패 콜백 미전송 + 구조화 로그 + exit 1
 - 포털 일시 실패:
   - retryable=true 코드 매핑 확인
 - 포털 영구 실패:
   - retryable=false 코드 매핑 확인
 - 콜백 API 장애:
   - 5xx/timeout 재시도 정책 동작 확인
+- 콜백 중복 처리:
+  - `2xx` 우선 성공 판정 + `409` 중복 성공 허용 확인
 - 중복 실행:
   - 동일 `job_id` 2회 실행 시 외부 호출/콜백 중복 방지 확인
 
@@ -161,9 +165,10 @@
 - `SCRAPE_CALLBACK_TIMEOUT_MS`
 - `SCRAPE_CALLBACK_MAX_RETRIES`
 - `WORKER_TOTAL_TIMEOUT_MS`
+- `WORKER_GRACEFUL_SHUTDOWN_MS`
 - `PORTAL_TIMEOUT_MS`
-- `WORKER_INPUT_MODE` (예: `sqs-body`, `raw-json`)
-- `SQS_MESSAGE_BODY` (RunTask 인자 전달 시 사용)
+- `SQS_MESSAGE_BODY` (EventBridge Pipe/ECS override 주입)
+- `SQS_MESSAGE_ID` (로그 상관관계)
 
 ## 결과물 형식 (산출물 보고 템플릿)
 1. 변경 파일 목록
@@ -173,10 +178,10 @@
 5. 남은 리스크/추가 TODO
 
 ## 리스크 및 롤백 포인트
-- 인프라 변경이 범위 밖이므로 실제 운영 idempotency 저장소 연동은 별도 작업 필요
+- idempotency는 백엔드 상태 전이 보장에 의존하므로 백엔드/DB 일관성 정책이 전제되어야 함
 - 콜백 재시도 정책은 백엔드 수용량/중복 처리 정책과 맞춰야 함
 - 롤백 시 HTTP 서버 기반 기존 엔트리포인트를 재활성화할 수 있도록 최소 분리 전략 유지
 
 ## 가정
 - 백엔드는 `POST /internal/scrape-results` 스키마를 그대로 수용한다.
-- ECS RunTask 입력 payload 전달 방식은 환경변수 주입 또는 command 인자로 제공되며, 워커는 raw JSON body를 받을 수 있다.
+- ECS RunTask 입력 payload는 EventBridge Pipe target transform + ECS container override를 통해 환경변수로 주입된다.

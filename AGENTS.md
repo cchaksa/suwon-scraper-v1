@@ -1,0 +1,83 @@
+# AGENTS.md
+
+## 1) 공통 규칙
+- 모든 커뮤니케이션과 산출물은 한국어로 작성한다.
+- 작업 전후로 현재 구조를 확인하고, 추측 대신 코드/설정 파일 기준으로 판단한다.
+- 작업 완료 후 반드시 double check를 수행한다.
+  - 변경 파일 재검토
+  - 빌드/실행 가능 여부 확인
+  - 영향 범위 점검
+- Pull Request 작성 시 PR 템플릿 존재 여부를 먼저 확인한다.
+  - 우선 확인 경로: `.github/PULL_REQUEST_TEMPLATE.md`, `.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/*.md`
+  - 템플릿이 있으면 해당 양식을 반드시 따른다.
+- 구조나 변경 사항이 생길 시 `AGENTS.md` 내용을 업데이트 한다.
+- 작업으로 인해 본 문서의 내용이 달라졌다면 같은 작업에서 `AGENTS.md`도 갱신한다.
+
+## 2) 프로젝트 개요
+- 목적: 수원대학교 포털/학사 시스템에서 학생 정보, 수강 정보, 성적 정보를 크롤링해 API로 제공
+- 런타임: Node.js + TypeScript + Express + Playwright
+- 배포: Docker 이미지 빌드 후 Amazon ECS(Fargate) 배포
+- 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`) 실행
+
+## 3) 현재 저장소 구조(핵심)
+- `src/server.ts`: Express 엔트리포인트(`/auth`, `/scrape`, `/health`), 브라우저 lifecycle 관리
+- `src/crawlers/*`: 학생/수강/성적 크롤링 API 호출
+- `src/services/merge.ts`: 성적(Credit) + 수강(Course) 학기별 병합
+- `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
+- `src/utils/logger.ts`: 단순 콘솔 로거
+- `dist/*`: TypeScript 빌드 산출물
+- `.github/workflows/deploy.yml`: ECR 이미지 푸시 + ECS 서비스 배포
+- `task-definition.json`: ECS task 정의
+- `layer/nodejs/*`, `.serverless/*`: Lambda/Serverless 관련 산출물/의존성(현재 ECS 배포와 별도 히스토리 영역)
+
+## 4) 개발/실행 명령어
+- 의존성 설치: `yarn install`
+- 개발 실행: `yarn dev`
+- 빌드: `yarn build`
+- 운영 실행(빌드 후): `yarn start`
+
+## 5) 구현 규칙
+- API/비즈니스 로직 변경은 `src/*` 기준으로 수행한다.
+- `dist/*`는 빌드 결과물이므로 직접 수정하지 않는다.
+- 크롤링 로직 변경 시 다음을 유지한다.
+  - 로그인 실패/계정 잠김 alert 처리
+  - `withBrowser` 기반 브라우저/컨텍스트/페이지 종료 보장
+  - 외부 응답 누락/null 케이스 방어 로직
+- 병합 로직 변경 시 학기 키 규칙(`{year}-{semesterCode}`)과 과목 코드 기준 병합 규칙을 명확히 유지한다.
+- 타입 변경 시 관련 DTO, 서비스, 엔드포인트 응답 구조를 함께 맞춘다.
+
+## 6) 배포 관련 주의사항
+- ECS 배포 파이프라인은 `main` push 트리거다.
+- 아래 값은 서로 일치해야 한다.
+  - workflow env: `ECS_SERVICE`, `ECS_CLUSTER`, `CONTAINER_NAME`, `TASK_DEFINITION_FAMILY`
+  - `task-definition.json`의 `family`, `containerDefinitions[].name`
+- Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.
+
+## 7) 변경 후 double check 체크리스트
+1. `git diff`로 의도한 파일만 변경되었는지 확인
+2. `yarn build` 성공 여부 확인
+3. API 변경 시 최소 엔드포인트 수준 점검
+   - `GET /health`
+   - `POST /auth` 입력 검증/오류 메시지
+   - `POST /scrape` 입력 검증/오류 분기
+4. 문서/타입/로직 불일치 여부 확인
+5. 필요 시 `AGENTS.md` 동기화 여부 재확인
+
+## 8) PR 작성 규칙
+- PR 본문에는 최소한 다음을 포함한다.
+  - 변경 목적
+  - 주요 변경 사항
+  - 검증 방법 및 결과
+  - 리스크/롤백 포인트
+- PR 템플릿이 있으면 템플릿 섹션을 유지한 채로 작성한다.
+
+## 9) Context 문서 규칙
+- 작업 컨텍스트 문서는 `docs/` 하위에 생성한다.
+- 파일명은 반드시 `{작업 이름}-context.md` 형식을 따른다.
+- 컨텍스트 문서를 작성할 때는 `docs/CONTEXT.md` 규약을 준수한다.
+- 컨텍스트 문서는 한국어로 작성하고, 코드/설정 기반 사실과 결정 근거를 함께 기록한다.
+
+## 10) 커밋 규칙
+- 브랜치 명은 `feat/{번호}` 형식을 사용한다.
+- 커밋 메시지는 `{번호} {커밋 타입}: {한글 메세지}` 형식을 사용한다.
+  - 예: `1 feat: 로그인 오류 처리 개선`

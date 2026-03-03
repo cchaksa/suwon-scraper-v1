@@ -31,7 +31,7 @@
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
-- `.github/workflows/deploy.yml`: ECR 이미지 배포 + IaC 전달용 IMAGE_URI 출력/아티팩트
+- `.github/workflows/deploy.yml`: ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신
 - `task-definition.json`: ECS task 정의
 - `layer/nodejs/*`, `.serverless/*`: Lambda/Serverless 관련 산출물/의존성(현재 ECS 배포와 별도 히스토리 영역)
 
@@ -57,7 +57,9 @@
 ## 6) 배포 관련 주의사항
 - 워커 배포 파이프라인은 `main` push 트리거다.
 - `.github/workflows/deploy.yml`는 ECS 서비스 업데이트를 수행하지 않는다.
-- CI가 출력한 `IMAGE_URI`를 IaC(Terraform) 단계에서 `task-definition.json`의 `${IMAGE_URI}`에 반영해야 한다.
+- 배포 순서는 `ECR push -> ECS register-task-definition -> EventBridge Pipe update`로 유지한다.
+- Pipe 이름은 `prod-scraper-jobs-to-ecs`를 기준으로 관리한다.
+- CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.
 - Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.
 
 ## 7) 변경 후 double check 체크리스트

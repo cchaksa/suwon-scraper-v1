@@ -6,7 +6,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: suwon-scraper
+  ECR_REPOSITORY: prod-scraper-worker
 
 jobs:
   publish-image:

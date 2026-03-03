@@ -8,18 +8,37 @@
   "containerDefinitions": [
     {
       "name": "suwon-scraper2",
-      "image": "${ECR_REPOSITORY_URI}:latest",
-      "portMappings": [
-        {
-          "containerPort": 3000,
-          "protocol": "tcp",
-          "hostPort": 3000    
-        }
-      ],
+      "image": "${IMAGE_URI}",
       "environment": [
         {
           "name": "NODE_ENV",
           "value": "production"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_BASE_URL",
+          "value": "${SCRAPE_CALLBACK_BASE_URL}"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_TIMEOUT_MS",
+          "value": "5000"
+        },
+        {
+          "name": "WORKER_TOTAL_TIMEOUT_MS",
+          "value": "120000"
+        },
+        {
+          "name": "WORKER_GRACEFUL_SHUTDOWN_MS",
+          "value": "10000"
+        },
+        {
+          "name": "PORTAL_TIMEOUT_MS",
+          "value": "60000"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SCRAPE_CALLBACK_HMAC_SECRET",
+          "valueFrom": "${SCRAPE_CALLBACK_HMAC_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

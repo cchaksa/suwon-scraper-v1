@@ -4,9 +4,14 @@
   "license": "MIT",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "yarn clean && tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts"
+    "build": "npm run clean && tsc",
+    "start": "node dist/worker.js",
+    "start:worker": "node dist/worker.js",
+    "start:server": "node dist/server.js",
+    "dev": "ts-node src/worker.ts",
+    "dev:worker": "ts-node src/worker.ts",
+    "dev:server": "ts-node src/server.ts",
+    "test": "npm run build && node --test dist/tests/*.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -19,6 +24,7 @@
     "@types/aws-lambda": "^8.10.130",
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
+    "@types/node": "^22.15.30",
     "typescript": "^5.0.0",
     "ts-node": "^10.9.2"
   }

@@ -4,7 +4,7 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::445567115863:role/ecsTaskExecutionRole",  
+  "executionRoleArn": "arn:aws:iam::445567115863:role/ecsTaskExecutionRole",
   "containerDefinitions": [
     {
       "name": "suwon-scraper2",
@@ -15,12 +15,24 @@
           "value": "production"
         },
         {
+          "name": "AWS_REGION",
+          "value": "ap-northeast-2"
+        },
+        {
+          "name": "SQS_QUEUE_URL",
+          "value": "https://sqs.ap-northeast-2.amazonaws.com/984762359128/prod-scraper-jobs"
+        },
+        {
           "name": "SCRAPE_CALLBACK_BASE_URL",
-          "value": "${SCRAPE_CALLBACK_BASE_URL}"
+          "value": "https://dev.api.cchaksa.com"
         },
         {
           "name": "SCRAPE_CALLBACK_TIMEOUT_MS",
           "value": "5000"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_MAX_RETRIES",
+          "value": "3"
         },
         {
           "name": "WORKER_TOTAL_TIMEOUT_MS",
@@ -38,7 +50,7 @@
       "secrets": [
         {
           "name": "SCRAPE_CALLBACK_HMAC_SECRET",
-          "valueFrom": "${SCRAPE_CALLBACK_HMAC_SECRET_ARN}"
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy"
         }
       ],
       "logConfiguration": {

@@ -1,4 +1,4 @@
-name: Publish Worker Image to ECR
+name: Deploy Worker Image and Update Pipe
 
 on:
   push:
@@ -7,14 +7,17 @@ on:
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: prod-scraper-worker
+  CONTAINER_NAME: suwon-scraper2
+  PIPE_NAME: prod-scraper-jobs-to-ecs
 
 jobs:
   publish-image:
-    # This pipeline only publishes worker container images.
-    # ECS RunTask wiring (EventBridge Pipe / task launch) is managed in IaC.
+    # This pipeline deploys worker changes without Terraform apply:
+    # 1) ECR push -> 2) ECS task definition revision register -> 3) EventBridge Pipe target update
     runs-on: ubuntu-latest
     outputs:
       image_uri: ${{ steps.build-image.outputs.image_uri }}
+      task_definition_arn: ${{ steps.register-task-def.outputs.task_definition_arn }}
 
     steps:
     - uses: actions/checkout@v3
@@ -41,25 +44,87 @@ jobs:
         docker push "$IMAGE_URI"
         echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
-    - name: Print published image URI for IaC handoff
+    - name: Register ECS task definition revision with new image
+      id: register-task-def
       run: |
-        echo "Published IMAGE_URI=${{ steps.build-image.outputs.image_uri }}"
+        set -euo pipefail
+        IMAGE_URI="${{ steps.build-image.outputs.image_uri }}"
+
+        jq --arg image "$IMAGE_URI" --arg container "$CONTAINER_NAME" \
+          '.containerDefinitions |= map(if .name == $container then .image = $image else . end)' \
+          task-definition.json > rendered-task-definition.json
+
+        TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://rendered-task-definition.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" >/dev/null
+        echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+    - name: Update EventBridge Pipe target task definition
+      id: update-pipe
+      run: |
+        set -euo pipefail
+        TASK_DEFINITION_ARN="${{ steps.register-task-def.outputs.task_definition_arn }}"
+
+        aws pipes describe-pipe --name "$PIPE_NAME" > pipe-description.json
+        ROLE_ARN=$(jq -r '.RoleArn' pipe-description.json)
+        SOURCE_ARN=$(jq -r '.Source' pipe-description.json)
+        TARGET_ARN=$(jq -r '.Target' pipe-description.json)
+
+        jq --arg taskDefArn "$TASK_DEFINITION_ARN" \
+          '.TargetParameters | .EcsTaskParameters.TaskDefinitionArn = $taskDefArn' \
+          pipe-description.json > updated-target-parameters.json
+
+        aws pipes update-pipe \
+          --name "$PIPE_NAME" \
+          --role-arn "$ROLE_ARN" \
+          --source "$SOURCE_ARN" \
+          --target "$TARGET_ARN" \
+          --target-parameters file://updated-target-parameters.json >/dev/null
+
+        CURRENT_PIPE_TASK_ARN=$(aws pipes describe-pipe \
+          --name "$PIPE_NAME" \
+          --query 'TargetParameters.EcsTaskParameters.TaskDefinitionArn' \
+          --output text)
+
+        if [ "$CURRENT_PIPE_TASK_ARN" != "$TASK_DEFINITION_ARN" ]; then
+          echo "Pipe task definition ARN mismatch: expected=$TASK_DEFINITION_ARN actual=$CURRENT_PIPE_TASK_ARN"
+          exit 1
+        fi
+
+        echo "pipe_task_definition_arn=$CURRENT_PIPE_TASK_ARN" >> "$GITHUB_OUTPUT"
 
     - name: Save IMAGE_URI artifact for IaC handoff
       run: |
+        set -euo pipefail
+        cat > deployment-output.json <<EOF
+        {
+          "image_uri": "${{ steps.build-image.outputs.image_uri }}",
+          "task_definition_arn": "${{ steps.register-task-def.outputs.task_definition_arn }}",
+          "pipe_name": "${{ env.PIPE_NAME }}",
+          "pipe_task_definition_arn": "${{ steps.update-pipe.outputs.pipe_task_definition_arn }}"
+        }
+        EOF
         echo "${{ steps.build-image.outputs.image_uri }}" > image-uri.txt
 
     - name: Upload IMAGE_URI artifact
       uses: actions/upload-artifact@v4
       with:
-        name: worker-image-uri
-        path: image-uri.txt
+        name: worker-deployment-output
+        path: |
+          image-uri.txt
+          deployment-output.json
         retention-days: 7
 
-    - name: Add IaC handoff summary
+    - name: Add deployment summary
       run: |
-        echo "## Worker image published" >> "$GITHUB_STEP_SUMMARY"
+        echo "## Worker deployment completed" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
         echo "- IMAGE_URI: \`${{ steps.build-image.outputs.image_uri }}\`" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Artifact: \`worker-image-uri/image-uri.txt\`" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Next action: IaC(Terraform)에서 ECS RunTask 대상 이미지 값을 위 IMAGE_URI로 반영" >> "$GITHUB_STEP_SUMMARY"
+        echo "- TASK_DEFINITION_ARN: \`${{ steps.register-task-def.outputs.task_definition_arn }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- PIPE_NAME: \`${{ env.PIPE_NAME }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- PIPE_TASK_DEFINITION_ARN: \`${{ steps.update-pipe.outputs.pipe_task_definition_arn }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Artifact: \`worker-deployment-output/deployment-output.json\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Required CI IAM: ecs:RegisterTaskDefinition, ecs:DescribeTaskDefinition, pipes:DescribePipe, pipes:UpdatePipe, iam:PassRole" >> "$GITHUB_STEP_SUMMARY"

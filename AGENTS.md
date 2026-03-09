@@ -59,6 +59,8 @@
 - `.github/workflows/deploy.yml`는 ECS 서비스 업데이트를 수행하지 않는다.
 - 배포 순서는 `ECR push -> ECS register-task-definition -> EventBridge Pipe update`로 유지한다.
 - Pipe 이름은 `prod-scraper-jobs-to-ecs`를 기준으로 관리한다.
+- 운영 태스크 입력은 `WORKER_INPUT_MODE=pipe` + Pipe env override(`SQS_MESSAGE_BODY`, `SQS_MESSAGE_ID`)를 기준으로 관리한다.
+- 운영 task definition에는 `SQS_QUEUE_URL`을 두지 않고, poll 모드는 로컬/수동 실행 전용으로 본다.
 - CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.
 - Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.
 

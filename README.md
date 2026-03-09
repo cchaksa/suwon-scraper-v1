@@ -17,11 +17,12 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 
 ### 입력 전달 메커니즘 (운영)
 - EventBridge Pipe가 SQS 메시지를 읽어 ECS RunTask를 실행한다.
+- 운영 태스크는 `WORKER_INPUT_MODE=pipe`로 실행되며, Pipe가 컨테이너 env로 원본 메시지를 직접 주입한다.
 - 워커 입력 우선순위:
   - 1순위: `SQS_MESSAGE_BODY`
   - 2순위: `argv[2]`
   - 3순위: `SQS_QUEUE_URL` 기반 SQS poll
-- 현재 운영 구성은 `SQS_QUEUE_URL` 기반 poll 모드를 사용한다.
+- 운영 구성은 `SQS_MESSAGE_BODY` 직접 주입만 허용하며, poll 모드는 로컬/수동 실행 전용이다.
 
 ### 재시도 책임 경계
 - 워커 내부 재시도는 **콜백 전송**(`POST /internal/scrape-results`)에만 적용된다.
@@ -45,7 +46,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 ### 환경변수
 - `NODE_ENV=production`
 - `AWS_REGION=ap-northeast-2`
-- `SQS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/984762359128/prod-scraper-jobs`
+- `WORKER_INPUT_MODE=pipe`
 - `SCRAPE_CALLBACK_BASE_URL=https://dev.api.cchaksa.com`
 - `SCRAPE_CALLBACK_TIMEOUT_MS=5000`
 - `SCRAPE_CALLBACK_MAX_RETRIES=3`
@@ -53,12 +54,14 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `WORKER_GRACEFUL_SHUTDOWN_MS=10000`
 - `PORTAL_TIMEOUT_MS=60000`
 - secret: `SCRAPE_CALLBACK_HMAC_SECRET` (ECS secret 주입)
+- 로컬/수동 poll 모드 전용: `SQS_QUEUE_URL`, `SQS_POLL_WAIT_TIME_SECONDS`, `SQS_POLL_VISIBILITY_TIMEOUT_SECONDS`
 
 ### 배포 파이프라인
 - Terraform apply 없이 스크래핑 리포 CI에서 다음 순서로 배포한다.
   - 1) ECR push
   - 2) ECS task definition revision 등록(새 `IMAGE_URI`)
-  - 3) EventBridge Pipe(`prod-scraper-jobs-to-ecs`) target task definition ARN 갱신
+  - 3) EventBridge Pipe(`prod-scraper-jobs-to-ecs`) source batch 크기와 target env override를 함께 갱신
+- Pipe는 `BatchSize=1`, `MaximumBatchingWindowInSeconds=0`, `SQS_MESSAGE_BODY=$[0].body`, `SQS_MESSAGE_ID=$[0].messageId`를 유지한다.
 - CI 산출물: `IMAGE_URI`, `TASK_DEFINITION_ARN`, `PIPE_TASK_DEFINITION_ARN`
 - 실패 시 workflow는 즉시 실패 처리한다.
 

@@ -54,7 +54,11 @@
 ### 1) 워커 실행 모델
 - HTTP 서버 대기 방식은 기본 실행 경로에서 제거한다.
 - 신규 워커 엔트리포인트(`src/worker.ts`)를 추가하고, 1회 실행 후 프로세스 종료한다.
-- 운영 입력 payload는 EventBridge Pipe target transform + ECS container override를 통해 주입되는 `SQS_MESSAGE_BODY`를 기준으로 파싱한다.
+- 운영 입력 payload는 EventBridge Pipe ECS target container override를 통해 주입되는 `SQS_MESSAGE_BODY`를 기준으로 파싱한다.
+- SQS source 기준 실제 env override 규약:
+  - `SQS_MESSAGE_BODY=$.body`
+  - `SQS_MESSAGE_ID=$.messageId`
+- `SQS_MESSAGE_BODY`는 SQS message body 원문 JSON string이어야 하며, literal path 문자열(`$[0].body` 등)은 유효하지 않다.
 - 로컬/테스트를 위해 `argv[2]` fallback을 제공한다.
 - `NODE_ENV=production`에서 `SQS_MESSAGE_BODY` 미존재 시 오배포로 간주하고 실패 종료한다.
 
@@ -169,6 +173,11 @@
 - `PORTAL_TIMEOUT_MS`
 - `SQS_MESSAGE_BODY` (EventBridge Pipe/ECS override 주입)
 - `SQS_MESSAGE_ID` (로그 상관관계)
+
+## shadow E2E 반영 메모
+- `develop-shadow` 환경 E2E에서 ECS RunTask와 secret injection, log delivery는 정상 동작했다.
+- 초기 Pipe 설정의 `"$[0].body"`, `"$[0].messageId"`는 literal string으로 주입되어 워커 JSON parse가 실패했다.
+- 수정 후 기준은 per-record JSON path `$.body`, `$.messageId`이다.
 
 ## 결과물 형식 (산출물 보고 템플릿)
 1. 변경 파일 목록

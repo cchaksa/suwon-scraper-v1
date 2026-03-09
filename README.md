@@ -18,11 +18,17 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 ### 입력 전달 메커니즘 (운영)
 - EventBridge Pipe가 shadow SQS 메시지를 읽어 ECS RunTask를 실행한다.
 - 운영 태스크는 `WORKER_INPUT_MODE=pipe`로 실행되며, Pipe가 컨테이너 env로 원본 메시지를 직접 주입한다.
+- EventBridge Pipes ECS target override의 env 동적 값은 per-record JSON path를 사용한다.
+  - `SQS_MESSAGE_BODY=$.body`
+  - `SQS_MESSAGE_ID=$.messageId`
 - 워커 입력 우선순위:
   - 1순위: `SQS_MESSAGE_BODY`
   - 2순위: `argv[2]`
   - 3순위: `SQS_QUEUE_URL` 기반 SQS poll
 - 운영 구성은 `SQS_MESSAGE_BODY` 직접 주입만 허용하며, poll 모드는 로컬/수동 실행 전용이다.
+- 워커가 기대하는 실제 포맷:
+  - `SQS_MESSAGE_BODY`: SQS message body 원문 JSON string
+  - `SQS_MESSAGE_ID`: 실제 SQS messageId 문자열
 
 ### 재시도 책임 경계
 - 워커 내부 재시도는 **콜백 전송**(`POST /internal/scrape-results`)에만 적용된다.
@@ -61,7 +67,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 1) ECR push
   - 2) ECS task definition revision 등록(새 `IMAGE_URI`)
   - 3) EventBridge Pipe(`develop-shadow-scraper-jobs-to-ecs`) source batch 크기와 target env override를 함께 갱신
-- Pipe는 `BatchSize=1`, `MaximumBatchingWindowInSeconds=0`, `SQS_MESSAGE_BODY=$[0].body`, `SQS_MESSAGE_ID=$[0].messageId`를 유지한다.
+- Pipe는 `BatchSize=1`, `MaximumBatchingWindowInSeconds=0`, `SQS_MESSAGE_BODY=$.body`, `SQS_MESSAGE_ID=$.messageId`를 유지한다.
 - 배포 대상 리소스는 다음 shadow 기준과 일치해야 한다.
   - ECR repository: `develop-shadow-scraper-worker`
   - Pipe: `develop-shadow-scraper-jobs-to-ecs`

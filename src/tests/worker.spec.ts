@@ -19,6 +19,7 @@ function createConfig(): WorkerConfig {
     sqsPollWaitTimeSeconds: 10,
     sqsPollVisibilityTimeoutSeconds: 60,
     awsRegion: "ap-northeast-2",
+    inputMode: "auto",
   };
 }
 
@@ -188,6 +189,19 @@ test("env/argv 입력이 없으면 poll 모드로 1건 수신", async () => {
   assert.equal(getReceiveCount(), 1);
 });
 
+test("pipe 모드에서 env 메시지가 없으면 poll하지 않고 실패", async () => {
+  const config = createConfig();
+  config.inputMode = "pipe";
+  config.sqsMessageBody = "";
+  const { deps, getReceiveCount } = createDeps();
+
+  await assert.rejects(
+    () => runWorker(config, deps, { argvMessage: "" }),
+    /INPUT_SOURCE_MISSING: WORKER_INPUT_MODE=pipe 에서는 SQS_MESSAGE_BODY가 필수입니다\./
+  );
+  assert.equal(getReceiveCount(), 0);
+});
+
 test("poll 모드 성공 시 deleteMessage 호출", async () => {
   const config = createConfig();
   config.sqsMessageBody = "";
@@ -217,6 +231,23 @@ test("기존 env 경로가 우선이며 poll 호출하지 않음", async () => {
   config.sqsMessageBody = JSON.stringify({
     job_id: "env-job-1",
     user_id: "user-10",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+  const { deps, getReceiveCount } = createDeps();
+
+  const exitCode = await runWorker(config, deps, { argvMessage: "" });
+  assert.equal(exitCode, 0);
+  assert.equal(getReceiveCount(), 0);
+});
+
+test("pipe 모드에서도 env 메시지가 있으면 정상 처리", async () => {
+  const config = createConfig();
+  config.inputMode = "pipe";
+  config.sqsMessageBody = JSON.stringify({
+    job_id: "pipe-env-job-1",
+    user_id: "user-12",
     portal_type: "suwon",
     request_payload: { username: "17019013", password: "pw" },
     requested_at: "2026-03-03T10:00:00.000Z",
@@ -270,6 +301,40 @@ test("env/argv/queue 모두 없으면 INPUT_SOURCE_MISSING 종료", async () => 
 
     if (prevCallbackSecret === undefined) delete process.env.SCRAPE_CALLBACK_HMAC_SECRET;
     else process.env.SCRAPE_CALLBACK_HMAC_SECRET = prevCallbackSecret;
+
+    if (prevSqsBody === undefined) delete process.env.SQS_MESSAGE_BODY;
+    else process.env.SQS_MESSAGE_BODY = prevSqsBody;
+
+    if (prevSqsQueueUrl === undefined) delete process.env.SQS_QUEUE_URL;
+    else process.env.SQS_QUEUE_URL = prevSqsQueueUrl;
+  }
+});
+
+test("pipe 모드 환경 실행에서 env 메시지 누락 시 INPUT_SOURCE_MISSING 종료", async () => {
+  const prevCallbackUrl = process.env.SCRAPE_CALLBACK_BASE_URL;
+  const prevCallbackSecret = process.env.SCRAPE_CALLBACK_HMAC_SECRET;
+  const prevInputMode = process.env.WORKER_INPUT_MODE;
+  const prevSqsBody = process.env.SQS_MESSAGE_BODY;
+  const prevSqsQueueUrl = process.env.SQS_QUEUE_URL;
+
+  try {
+    process.env.SCRAPE_CALLBACK_BASE_URL = "https://callback.example.com";
+    process.env.SCRAPE_CALLBACK_HMAC_SECRET = "secret";
+    process.env.WORKER_INPUT_MODE = "pipe";
+    delete process.env.SQS_MESSAGE_BODY;
+    process.env.SQS_QUEUE_URL = "https://sqs.ap-northeast-2.amazonaws.com/123456789012/worker-queue";
+
+    const exitCode = await runWorkerFromEnvironment("");
+    assert.equal(exitCode, 1);
+  } finally {
+    if (prevCallbackUrl === undefined) delete process.env.SCRAPE_CALLBACK_BASE_URL;
+    else process.env.SCRAPE_CALLBACK_BASE_URL = prevCallbackUrl;
+
+    if (prevCallbackSecret === undefined) delete process.env.SCRAPE_CALLBACK_HMAC_SECRET;
+    else process.env.SCRAPE_CALLBACK_HMAC_SECRET = prevCallbackSecret;
+
+    if (prevInputMode === undefined) delete process.env.WORKER_INPUT_MODE;
+    else process.env.WORKER_INPUT_MODE = prevInputMode;
 
     if (prevSqsBody === undefined) delete process.env.SQS_MESSAGE_BODY;
     else process.env.SQS_MESSAGE_BODY = prevSqsBody;

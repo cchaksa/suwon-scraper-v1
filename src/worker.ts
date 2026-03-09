@@ -7,6 +7,7 @@ import { logger } from "./utils/logger";
 import type { WorkerCallbackPayload, WorkerFailureResult, WorkerJobInput, WorkerSuccessResult } from "./types/worker";
 
 type InputSourceType = "env" | "argv" | "sqs-poll";
+type WorkerInputMode = "auto" | "pipe";
 
 interface ResolvedInput {
   source: InputSourceType;
@@ -29,6 +30,7 @@ export interface WorkerConfig {
   sqsPollWaitTimeSeconds: number;
   sqsPollVisibilityTimeoutSeconds: number;
   awsRegion: string;
+  inputMode: WorkerInputMode;
 }
 
 export interface WorkerRuntimeDeps {
@@ -48,6 +50,10 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseInputMode(raw: string | undefined): WorkerInputMode {
+  return raw === "pipe" ? "pipe" : "auto";
+}
+
 function loadConfigFromEnv(): WorkerConfig {
   return {
     portalTimeoutMs: parsePositiveNumber(process.env.PORTAL_TIMEOUT_MS, 60000),
@@ -63,6 +69,7 @@ function loadConfigFromEnv(): WorkerConfig {
     sqsPollWaitTimeSeconds: parsePositiveInt(process.env.SQS_POLL_WAIT_TIME_SECONDS, 10),
     sqsPollVisibilityTimeoutSeconds: parsePositiveInt(process.env.SQS_POLL_VISIBILITY_TIMEOUT_SECONDS, 60),
     awsRegion: process.env.AWS_REGION ?? "ap-northeast-2",
+    inputMode: parseInputMode(process.env.WORKER_INPUT_MODE),
   };
 }
 
@@ -109,6 +116,10 @@ async function resolveInputSource(config: WorkerConfig, deps: WorkerRuntimeDeps,
       rawMessage: argMessage,
       sqsMessageId: config.sqsMessageId,
     };
+  }
+
+  if (config.inputMode === "pipe") {
+    throw new Error("INPUT_SOURCE_MISSING: WORKER_INPUT_MODE=pipe 에서는 SQS_MESSAGE_BODY가 필수입니다.");
   }
 
   const queueUrl = config.sqsQueueUrl?.trim();

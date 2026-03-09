@@ -1,14 +1,14 @@
 {
-  "family": "suwon-scraper2",
+  "family": "develop-shadow-scraper-worker",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::984762359128:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::984762359128:role/prod-scraper-worker-task-role",
+  "executionRoleArn": "arn:aws:iam::984762359128:role/develop-shadow-scraper-worker-exec-role",
+  "taskRoleArn": "arn:aws:iam::984762359128:role/develop-shadow-scraper-worker-task-role",
   "containerDefinitions": [
     {
-      "name": "suwon-scraper2",
+      "name": "worker",
       "image": "${IMAGE_URI}",
       "environment": [
         {
@@ -57,7 +57,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/suwon-scraper2",
+          "awslogs-group": "/ecs/develop-shadow-scraper-worker",
           "awslogs-region": "ap-northeast-2",
           "awslogs-stream-prefix": "ecs"
         }

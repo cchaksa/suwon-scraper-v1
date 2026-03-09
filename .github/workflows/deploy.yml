@@ -6,9 +6,9 @@ on:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: prod-scraper-worker
-  CONTAINER_NAME: suwon-scraper2
-  PIPE_NAME: prod-scraper-jobs-to-ecs
+  ECR_REPOSITORY: develop-shadow-scraper-worker
+  CONTAINER_NAME: worker
+  PIPE_NAME: develop-shadow-scraper-jobs-to-ecs
 
 jobs:
   publish-image:

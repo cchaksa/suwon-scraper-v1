@@ -242,6 +242,19 @@ test("기존 env 경로가 우선이며 poll 호출하지 않음", async () => {
   assert.equal(getReceiveCount(), 0);
 });
 
+test("pipe 모드 env는 실제 SQS body JSON string을 그대로 파싱한다", async () => {
+  const config = createConfig();
+  config.inputMode = "pipe";
+  config.sqsMessageBody = "{\"job_id\":\"pipe-json-job-1\",\"user_id\":\"user-13\",\"portal_type\":\"suwon\",\"request_payload\":{\"username\":\"17019013\",\"password\":\"pw\"},\"requested_at\":\"2026-03-03T10:00:00.000Z\"}";
+  const { deps, getReceiveCount, callbackPayloads } = createDeps();
+
+  const exitCode = await runWorker(config, deps, { argvMessage: "" });
+  assert.equal(exitCode, 0);
+  assert.equal(getReceiveCount(), 0);
+  assert.equal(callbackPayloads.length, 1);
+  assert.equal(callbackPayloads[0].status, "succeeded");
+});
+
 test("pipe 모드에서도 env 메시지가 있으면 정상 처리", async () => {
   const config = createConfig();
   config.inputMode = "pipe";
@@ -257,6 +270,16 @@ test("pipe 모드에서도 env 메시지가 있으면 정상 처리", async () =
   const exitCode = await runWorker(config, deps, { argvMessage: "" });
   assert.equal(exitCode, 0);
   assert.equal(getReceiveCount(), 0);
+});
+
+test("literal 문자열 $[0].body 는 INVALID_PAYLOAD로 실패한다", async () => {
+  const config = createConfig();
+  config.inputMode = "pipe";
+  const { deps, callbackPayloads } = createDeps();
+
+  const exitCode = await runWorkerMessage("$[0].body", config, deps);
+  assert.equal(exitCode, 1);
+  assert.equal(callbackPayloads.length, 0);
 });
 
 test("기존 argv 경로가 poll보다 우선", async () => {

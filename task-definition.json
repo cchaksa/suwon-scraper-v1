@@ -4,7 +4,8 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::445567115863:role/ecsTaskExecutionRole",
+  "executionRoleArn": "arn:aws:iam::984762359128:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::984762359128:role/prod-scraper-worker-task-role",
   "containerDefinitions": [
     {
       "name": "suwon-scraper2",
@@ -19,8 +20,8 @@
           "value": "ap-northeast-2"
         },
         {
-          "name": "SQS_QUEUE_URL",
-          "value": "https://sqs.ap-northeast-2.amazonaws.com/984762359128/prod-scraper-jobs"
+          "name": "WORKER_INPUT_MODE",
+          "value": "pipe"
         },
         {
           "name": "SCRAPE_CALLBACK_BASE_URL",

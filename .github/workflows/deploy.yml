@@ -73,8 +73,24 @@ jobs:
         SOURCE_ARN=$(jq -r '.Source' pipe-description.json)
         TARGET_ARN=$(jq -r '.Target' pipe-description.json)
 
-        jq --arg taskDefArn "$TASK_DEFINITION_ARN" \
-          '.TargetParameters | .EcsTaskParameters.TaskDefinitionArn = $taskDefArn' \
+        jq \
+          '.SourceParameters
+          | .SqsQueueParameters.BatchSize = 1
+          | .SqsQueueParameters.MaximumBatchingWindowInSeconds = 0' \
+          pipe-description.json > updated-source-parameters.json
+
+        jq --arg taskDefArn "$TASK_DEFINITION_ARN" --arg container "$CONTAINER_NAME" \
+          '.TargetParameters
+          | .EcsTaskParameters.TaskDefinitionArn = $taskDefArn
+          | .EcsTaskParameters.Overrides.ContainerOverrides = [
+              {
+                "Name": $container,
+                "Environment": [
+                  { "name": "SQS_MESSAGE_BODY", "value": "$[0].body" },
+                  { "name": "SQS_MESSAGE_ID", "value": "$[0].messageId" }
+                ]
+              }
+            ]' \
           pipe-description.json > updated-target-parameters.json
 
         aws pipes update-pipe \
@@ -82,15 +98,45 @@ jobs:
           --role-arn "$ROLE_ARN" \
           --source "$SOURCE_ARN" \
           --target "$TARGET_ARN" \
+          --source-parameters file://updated-source-parameters.json \
           --target-parameters file://updated-target-parameters.json >/dev/null
 
-        CURRENT_PIPE_TASK_ARN=$(aws pipes describe-pipe \
-          --name "$PIPE_NAME" \
-          --query 'TargetParameters.EcsTaskParameters.TaskDefinitionArn' \
-          --output text)
+        aws pipes describe-pipe --name "$PIPE_NAME" > updated-pipe-description.json
+
+        CURRENT_PIPE_BATCH_SIZE=$(jq -r '.SourceParameters.SqsQueueParameters.BatchSize' updated-pipe-description.json)
+        CURRENT_PIPE_TASK_ARN=$(jq -r '.TargetParameters.EcsTaskParameters.TaskDefinitionArn' updated-pipe-description.json)
+        CURRENT_PIPE_BODY_ENV=$(jq -r --arg container "$CONTAINER_NAME" '
+          .TargetParameters.EcsTaskParameters.Overrides.ContainerOverrides[]?
+          | select(.Name == $container)
+          | .Environment[]?
+          | select((.name // .Name) == "SQS_MESSAGE_BODY")
+          | (.value // .Value)
+        ' updated-pipe-description.json)
+        CURRENT_PIPE_MESSAGE_ID_ENV=$(jq -r --arg container "$CONTAINER_NAME" '
+          .TargetParameters.EcsTaskParameters.Overrides.ContainerOverrides[]?
+          | select(.Name == $container)
+          | .Environment[]?
+          | select((.name // .Name) == "SQS_MESSAGE_ID")
+          | (.value // .Value)
+        ' updated-pipe-description.json)
+
+        if [ "$CURRENT_PIPE_BATCH_SIZE" != "1" ]; then
+          echo "Pipe batch size mismatch: expected=1 actual=$CURRENT_PIPE_BATCH_SIZE"
+          exit 1
+        fi
 
         if [ "$CURRENT_PIPE_TASK_ARN" != "$TASK_DEFINITION_ARN" ]; then
           echo "Pipe task definition ARN mismatch: expected=$TASK_DEFINITION_ARN actual=$CURRENT_PIPE_TASK_ARN"
+          exit 1
+        fi
+
+        if [ "$CURRENT_PIPE_BODY_ENV" != '$[0].body' ]; then
+          echo "Pipe body env mismatch: expected=\$[0].body actual=$CURRENT_PIPE_BODY_ENV"
+          exit 1
+        fi
+
+        if [ "$CURRENT_PIPE_MESSAGE_ID_ENV" != '$[0].messageId' ]; then
+          echo "Pipe message id env mismatch: expected=\$[0].messageId actual=$CURRENT_PIPE_MESSAGE_ID_ENV"
           exit 1
         fi
 

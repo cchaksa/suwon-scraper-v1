@@ -1,31 +1,63 @@
 {
-  "family": "suwon-scraper2",
+  "family": "develop-shadow-scraper-worker",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::445567115863:role/ecsTaskExecutionRole",  
+  "executionRoleArn": "arn:aws:iam::984762359128:role/develop-shadow-scraper-worker-exec-role",
+  "taskRoleArn": "arn:aws:iam::984762359128:role/develop-shadow-scraper-worker-task-role",
   "containerDefinitions": [
     {
-      "name": "suwon-scraper2",
-      "image": "${ECR_REPOSITORY_URI}:latest",
-      "portMappings": [
-        {
-          "containerPort": 3000,
-          "protocol": "tcp",
-          "hostPort": 3000    
-        }
-      ],
+      "name": "worker",
+      "image": "${IMAGE_URI}",
       "environment": [
         {
           "name": "NODE_ENV",
           "value": "production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "ap-northeast-2"
+        },
+        {
+          "name": "WORKER_INPUT_MODE",
+          "value": "pipe"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_BASE_URL",
+          "value": "https://dev.api.cchaksa.com"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_TIMEOUT_MS",
+          "value": "5000"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_MAX_RETRIES",
+          "value": "3"
+        },
+        {
+          "name": "WORKER_TOTAL_TIMEOUT_MS",
+          "value": "120000"
+        },
+        {
+          "name": "WORKER_GRACEFUL_SHUTDOWN_MS",
+          "value": "10000"
+        },
+        {
+          "name": "PORTAL_TIMEOUT_MS",
+          "value": "60000"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SCRAPE_CALLBACK_HMAC_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy"
         }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/suwon-scraper2",
+          "awslogs-group": "/ecs/develop-shadow-scraper-worker",
           "awslogs-region": "ap-northeast-2",
           "awslogs-stream-prefix": "ecs"
         }

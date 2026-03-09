@@ -15,8 +15,5 @@ COPY . .
 # TypeScript 빌드
 RUN yarn build
 
-# 포트 설정
-EXPOSE 3000
-
-# 실행 명령
-CMD ["yarn", "start"] 
+# 워커 실행 명령 (start = node dist/worker.js)
+CMD ["yarn", "start"]

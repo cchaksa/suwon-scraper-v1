@@ -1,4 +1,4 @@
-name: Deploy to Amazon ECS
+name: Deploy Worker Image and Update Pipe
 
 on:
   push:
@@ -6,15 +6,18 @@ on:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: suwon-scraper
-  ECS_SERVICE: suwon-scraper2        
-  ECS_CLUSTER: suwon-scraper
-  CONTAINER_NAME: suwon-scraper2
-  TASK_DEFINITION_FAMILY: suwon-scraper2  
+  ECR_REPOSITORY: develop-shadow-scraper-worker
+  CONTAINER_NAME: worker
+  PIPE_NAME: develop-shadow-scraper-jobs-to-ecs
 
 jobs:
-  deploy:
+  publish-image:
+    # This pipeline deploys worker changes without Terraform apply:
+    # 1) ECR push -> 2) ECS task definition revision register -> 3) EventBridge Pipe target update
     runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.build-image.outputs.image_uri }}
+      task_definition_arn: ${{ steps.register-task-def.outputs.task_definition_arn }}
 
     steps:
     - uses: actions/checkout@v3
@@ -36,22 +39,138 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker build -t "$IMAGE_URI" .
+        docker push "$IMAGE_URI"
+        echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
-    - name: Fill in the new image ID in the Amazon ECS task definition
-      id: task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
+    - name: Register ECS task definition revision with new image
+      id: register-task-def
+      run: |
+        set -euo pipefail
+        IMAGE_URI="${{ steps.build-image.outputs.image_uri }}"
 
-    - name: Deploy Amazon ECS task definition
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        jq --arg image "$IMAGE_URI" --arg container "$CONTAINER_NAME" \
+          '.containerDefinitions |= map(if .name == $container then .image = $image else . end)' \
+          task-definition.json > rendered-task-definition.json
+
+        TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://rendered-task-definition.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" >/dev/null
+        echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+    - name: Update EventBridge Pipe target task definition
+      id: update-pipe
+      run: |
+        set -euo pipefail
+        TASK_DEFINITION_ARN="${{ steps.register-task-def.outputs.task_definition_arn }}"
+
+        aws pipes describe-pipe --name "$PIPE_NAME" > pipe-description.json
+        ROLE_ARN=$(jq -r '.RoleArn' pipe-description.json)
+        SOURCE_ARN=$(jq -r '.Source' pipe-description.json)
+        TARGET_ARN=$(jq -r '.Target' pipe-description.json)
+
+        jq \
+          '.SourceParameters
+          | .SqsQueueParameters.BatchSize = 1
+          | .SqsQueueParameters.MaximumBatchingWindowInSeconds = 0' \
+          pipe-description.json > updated-source-parameters.json
+
+        jq --arg taskDefArn "$TASK_DEFINITION_ARN" --arg container "$CONTAINER_NAME" \
+          '.TargetParameters
+          | .EcsTaskParameters.TaskDefinitionArn = $taskDefArn
+          | .EcsTaskParameters.Overrides.ContainerOverrides = [
+              {
+                "Name": $container,
+                "Environment": [
+                  { "name": "SQS_MESSAGE_BODY", "value": "$[0].body" },
+                  { "name": "SQS_MESSAGE_ID", "value": "$[0].messageId" }
+                ]
+              }
+            ]' \
+          pipe-description.json > updated-target-parameters.json
+
+        aws pipes update-pipe \
+          --name "$PIPE_NAME" \
+          --role-arn "$ROLE_ARN" \
+          --source "$SOURCE_ARN" \
+          --target "$TARGET_ARN" \
+          --source-parameters file://updated-source-parameters.json \
+          --target-parameters file://updated-target-parameters.json >/dev/null
+
+        aws pipes describe-pipe --name "$PIPE_NAME" > updated-pipe-description.json
+
+        CURRENT_PIPE_BATCH_SIZE=$(jq -r '.SourceParameters.SqsQueueParameters.BatchSize' updated-pipe-description.json)
+        CURRENT_PIPE_TASK_ARN=$(jq -r '.TargetParameters.EcsTaskParameters.TaskDefinitionArn' updated-pipe-description.json)
+        CURRENT_PIPE_BODY_ENV=$(jq -r --arg container "$CONTAINER_NAME" '
+          .TargetParameters.EcsTaskParameters.Overrides.ContainerOverrides[]?
+          | select(.Name == $container)
+          | .Environment[]?
+          | select((.name // .Name) == "SQS_MESSAGE_BODY")
+          | (.value // .Value)
+        ' updated-pipe-description.json)
+        CURRENT_PIPE_MESSAGE_ID_ENV=$(jq -r --arg container "$CONTAINER_NAME" '
+          .TargetParameters.EcsTaskParameters.Overrides.ContainerOverrides[]?
+          | select(.Name == $container)
+          | .Environment[]?
+          | select((.name // .Name) == "SQS_MESSAGE_ID")
+          | (.value // .Value)
+        ' updated-pipe-description.json)
+
+        if [ "$CURRENT_PIPE_BATCH_SIZE" != "1" ]; then
+          echo "Pipe batch size mismatch: expected=1 actual=$CURRENT_PIPE_BATCH_SIZE"
+          exit 1
+        fi
+
+        if [ "$CURRENT_PIPE_TASK_ARN" != "$TASK_DEFINITION_ARN" ]; then
+          echo "Pipe task definition ARN mismatch: expected=$TASK_DEFINITION_ARN actual=$CURRENT_PIPE_TASK_ARN"
+          exit 1
+        fi
+
+        if [ "$CURRENT_PIPE_BODY_ENV" != '$[0].body' ]; then
+          echo "Pipe body env mismatch: expected=\$[0].body actual=$CURRENT_PIPE_BODY_ENV"
+          exit 1
+        fi
+
+        if [ "$CURRENT_PIPE_MESSAGE_ID_ENV" != '$[0].messageId' ]; then
+          echo "Pipe message id env mismatch: expected=\$[0].messageId actual=$CURRENT_PIPE_MESSAGE_ID_ENV"
+          exit 1
+        fi
+
+        echo "pipe_task_definition_arn=$CURRENT_PIPE_TASK_ARN" >> "$GITHUB_OUTPUT"
+
+    - name: Save IMAGE_URI artifact for IaC handoff
+      run: |
+        set -euo pipefail
+        cat > deployment-output.json <<EOF
+        {
+          "image_uri": "${{ steps.build-image.outputs.image_uri }}",
+          "task_definition_arn": "${{ steps.register-task-def.outputs.task_definition_arn }}",
+          "pipe_name": "${{ env.PIPE_NAME }}",
+          "pipe_task_definition_arn": "${{ steps.update-pipe.outputs.pipe_task_definition_arn }}"
+        }
+        EOF
+        echo "${{ steps.build-image.outputs.image_uri }}" > image-uri.txt
+
+    - name: Upload IMAGE_URI artifact
+      uses: actions/upload-artifact@v4
       with:
-        task-definition: ${{ steps.task-def.outputs.task-definition }}  # 수정된 task-definition 사용
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: true
+        name: worker-deployment-output
+        path: |
+          image-uri.txt
+          deployment-output.json
+        retention-days: 7
+
+    - name: Add deployment summary
+      run: |
+        echo "## Worker deployment completed" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- IMAGE_URI: \`${{ steps.build-image.outputs.image_uri }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- TASK_DEFINITION_ARN: \`${{ steps.register-task-def.outputs.task_definition_arn }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- PIPE_NAME: \`${{ env.PIPE_NAME }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- PIPE_TASK_DEFINITION_ARN: \`${{ steps.update-pipe.outputs.pipe_task_definition_arn }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Artifact: \`worker-deployment-output/deployment-output.json\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Required CI IAM: ecs:RegisterTaskDefinition, ecs:DescribeTaskDefinition, pipes:DescribePipe, pipes:UpdatePipe, iam:PassRole" >> "$GITHUB_STEP_SUMMARY"

@@ -79,6 +79,8 @@ jobs:
           | .SqsQueueParameters.MaximumBatchingWindowInSeconds = 0' \
           pipe-description.json > updated-source-parameters.json
 
+        # EventBridge Pipes ECS target dynamic parameters use per-record JSON path.
+        # For an SQS source with BatchSize=1, use $.body / $.messageId instead of $[0].*.
         jq --arg taskDefArn "$TASK_DEFINITION_ARN" --arg container "$CONTAINER_NAME" \
           '.TargetParameters
           | .EcsTaskParameters.TaskDefinitionArn = $taskDefArn
@@ -86,8 +88,8 @@ jobs:
               {
                 "Name": $container,
                 "Environment": [
-                  { "name": "SQS_MESSAGE_BODY", "value": "$[0].body" },
-                  { "name": "SQS_MESSAGE_ID", "value": "$[0].messageId" }
+                  { "name": "SQS_MESSAGE_BODY", "value": "$.body" },
+                  { "name": "SQS_MESSAGE_ID", "value": "$.messageId" }
                 ]
               }
             ]' \
@@ -130,13 +132,13 @@ jobs:
           exit 1
         fi
 
-        if [ "$CURRENT_PIPE_BODY_ENV" != '$[0].body' ]; then
-          echo "Pipe body env mismatch: expected=\$[0].body actual=$CURRENT_PIPE_BODY_ENV"
+        if [ "$CURRENT_PIPE_BODY_ENV" != '$.body' ]; then
+          echo "Pipe body env mismatch: expected=\$.body actual=$CURRENT_PIPE_BODY_ENV"
           exit 1
         fi
 
-        if [ "$CURRENT_PIPE_MESSAGE_ID_ENV" != '$[0].messageId' ]; then
-          echo "Pipe message id env mismatch: expected=\$[0].messageId actual=$CURRENT_PIPE_MESSAGE_ID_ENV"
+        if [ "$CURRENT_PIPE_MESSAGE_ID_ENV" != '$.messageId' ]; then
+          echo "Pipe message id env mismatch: expected=\$.messageId actual=$CURRENT_PIPE_MESSAGE_ID_ENV"
           exit 1
         fi
 

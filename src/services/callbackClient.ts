@@ -2,6 +2,7 @@ import { createHmac } from "crypto";
 import { request as httpRequest } from "http";
 import { request as httpsRequest } from "https";
 import { URL } from "url";
+import { hashRawPayload } from "./payloadValidator";
 import { logger as defaultLogger } from "../utils/logger";
 import type { WorkerCallbackPayload } from "../types/worker";
 
@@ -16,12 +17,25 @@ export interface CallbackClientOptions {
   timeoutMs: number;
   maxRetries: number;
   logger?: typeof defaultLogger;
+  nowFn?: () => number;
   sleepFn?: (ms: number) => Promise<void>;
   postFn?: (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<CallbackAttemptResult>;
 }
 
 export interface CallbackSendOptions {
   maxRetriesOverride?: number;
+  timestampOverride?: string;
+}
+
+export interface CallbackRequestArtifacts {
+  timestamp: string;
+  rawBody: string;
+  rawBodyHash: string;
+  canonicalString: string;
+  canonicalStringHash: string;
+  signature: string;
+  signatureEncoding: "hex";
+  headers: Record<string, string>;
 }
 
 export function buildCanonicalString(timestamp: string, rawBody: string): string {
@@ -30,6 +44,27 @@ export function buildCanonicalString(timestamp: string, rawBody: string): string
 
 export function buildSignature(secret: string, timestamp: string, rawBody: string): string {
   return createHmac("sha256", secret).update(buildCanonicalString(timestamp, rawBody)).digest("hex");
+}
+
+export function buildCallbackRequest(payload: WorkerCallbackPayload, secret: string, timestamp: string): CallbackRequestArtifacts {
+  const rawBody = JSON.stringify(payload);
+  const canonicalString = buildCanonicalString(timestamp, rawBody);
+  const signature = buildSignature(secret, timestamp, rawBody);
+
+  return {
+    timestamp,
+    rawBody,
+    rawBodyHash: hashRawPayload(rawBody),
+    canonicalString,
+    canonicalStringHash: hashRawPayload(canonicalString),
+    signature,
+    signatureEncoding: "hex",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Timestamp": timestamp,
+      "X-Signature": signature,
+    },
+  };
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -105,6 +140,7 @@ export class CallbackClient {
     this.options = {
       ...options,
       logger: options.logger ?? defaultLogger,
+      nowFn: options.nowFn ?? Date.now,
       sleepFn: options.sleepFn ?? defaultSleep,
       postFn: options.postFn ?? defaultPostJson,
     };
@@ -116,18 +152,27 @@ export class CallbackClient {
 
     let attempt = 0;
     while (attempt <= maxRetries) {
-      const timestamp = Date.now().toString();
-      const rawBody = JSON.stringify(payload);
-      const signature = buildSignature(this.options.secret, timestamp, rawBody);
+      const timestamp = options.timestampOverride ?? this.options.nowFn!().toString();
+      const requestArtifacts = buildCallbackRequest(payload, this.options.secret, timestamp);
 
       try {
-        const result = await this.options.postFn!(targetUrl, rawBody, {
-          "Content-Type": "application/json",
-          "X-Timestamp": timestamp,
-          "X-Signature": signature,
-        }, this.options.timeoutMs);
+        const result = await this.options.postFn!(
+          targetUrl,
+          requestArtifacts.rawBody,
+          requestArtifacts.headers,
+          this.options.timeoutMs
+        );
 
         if (isSuccessStatus(result.statusCode)) {
+          this.options.logger!.info("콜백 서명/전송 성공", {
+            job_id: payload.job_id,
+            attempt: attempt + 1,
+            timestamp: requestArtifacts.timestamp,
+            hmac_encoding: requestArtifacts.signatureEncoding,
+            raw_body_hash: requestArtifacts.rawBodyHash,
+            canonical_string_hash: requestArtifacts.canonicalStringHash,
+            status_code: result.statusCode,
+          });
           return result;
         }
 
@@ -138,6 +183,15 @@ export class CallbackClient {
         throw new Error(`CALLBACK_NON_RETRYABLE:${result.statusCode}`);
       } catch (error) {
         const retryableError = shouldRetryError(error) || (error instanceof Error && error.message.startsWith("CALLBACK_5XX"));
+        this.options.logger!.error("콜백 서명/전송 실패", {
+          job_id: payload.job_id,
+          attempt: attempt + 1,
+          timestamp: requestArtifacts.timestamp,
+          hmac_encoding: requestArtifacts.signatureEncoding,
+          raw_body_hash: requestArtifacts.rawBodyHash,
+          canonical_string_hash: requestArtifacts.canonicalStringHash,
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!retryableError || attempt === maxRetries) {
           throw error;
         }

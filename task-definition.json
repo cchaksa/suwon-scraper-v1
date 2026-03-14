@@ -51,7 +51,7 @@
       "secrets": [
         {
           "name": "SCRAPE_CALLBACK_HMAC_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy"
+          "valueFrom": "develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET"
         }
       ],
       "logConfiguration": {

@@ -59,8 +59,18 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `WORKER_TOTAL_TIMEOUT_MS=120000`
 - `WORKER_GRACEFUL_SHUTDOWN_MS=10000`
 - `PORTAL_TIMEOUT_MS=60000`
-- secret: `SCRAPE_CALLBACK_HMAC_SECRET` (ECS secret 주입)
+- secret: `SCRAPE_CALLBACK_HMAC_SECRET` (ECS secret 주입, shadow 테스트에서는 `develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET` 사용)
 - 로컬/수동 poll 모드 전용: `SQS_QUEUE_URL`, `SQS_POLL_WAIT_TIME_SECONDS`, `SQS_POLL_VISIBILITY_TIMEOUT_SECONDS`
+
+### 콜백 HMAC 규약
+- 알고리즘: `HMAC-SHA256`
+- canonical string: `${timestamp}.${rawBody}`
+- `timestamp`는 epoch milliseconds 문자열
+- `rawBody`는 실제 HTTP request body로 전송되는 `JSON.stringify(payload)` 결과 문자열 그대로 사용한다.
+- 헤더:
+  - `X-Timestamp`
+  - `X-Signature` (hex digest)
+- 디버깅 시 워커는 `timestamp`, `hmac_encoding`, `raw_body_hash`, `canonical_string_hash`를 로그에 남긴다.
 
 ### 배포 파이프라인
 - Terraform apply 없이 스크래핑 리포 CI에서 shadow 리소스만 다음 순서로 배포한다.

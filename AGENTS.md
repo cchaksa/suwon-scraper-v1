@@ -69,7 +69,8 @@
 - Pipe env override 값은 SQS source 기준 per-record JSON path(`$.body`, `$.messageId`)를 사용한다.
 - 운영 task definition에는 `SQS_QUEUE_URL`을 두지 않고, poll 모드는 로컬/수동 실행 전용으로 본다.
 - `SCRAPE_CALLBACK_BASE_URL=https://dev.api.cchaksa.com`는 shadow 경로 dev 테스트를 위한 의도된 설정으로 본다.
-- shadow task definition의 `SCRAPE_CALLBACK_HMAC_SECRET`는 shadow secret(`develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET`)을 사용해야 하며 `prod/*` secret을 참조하면 안 된다.
+- shadow task definition의 `SCRAPE_CALLBACK_HMAC_SECRET`는 short name이 아니라 Secrets Manager ARN을 사용해야 한다.
+- 현재 기준 값은 `arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy`다.
 - 콜백 HMAC 규약은 `HMAC-SHA256`, canonical string `${timestamp}.${rawBody}`, `X-Timestamp`, `X-Signature(hex)`로 고정한다.
 - CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.
 - Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.

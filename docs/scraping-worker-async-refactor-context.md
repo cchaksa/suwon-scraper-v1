@@ -179,7 +179,8 @@
 - `develop-shadow` 환경 E2E에서 ECS RunTask와 secret injection, log delivery는 정상 동작했다.
 - 초기 Pipe 설정의 `"$[0].body"`, `"$[0].messageId"`는 literal string으로 주입되어 워커 JSON parse가 실패했다.
 - 수정 후 기준은 per-record JSON path `$.body`, `$.messageId`이다.
-- shadow 태스크의 콜백 비밀키는 shadow secret(`develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET`)과 일치해야 한다.
+- shadow 태스크의 콜백 비밀키는 short name이 아니라 Secrets Manager ARN을 사용해야 한다.
+- 현재 기준 값은 `arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy`다.
 
 ## 결과물 형식 (산출물 보고 템플릿)
 1. 변경 파일 목록

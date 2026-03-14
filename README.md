@@ -59,7 +59,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `WORKER_TOTAL_TIMEOUT_MS=120000`
 - `WORKER_GRACEFUL_SHUTDOWN_MS=10000`
 - `PORTAL_TIMEOUT_MS=60000`
-- secret: `SCRAPE_CALLBACK_HMAC_SECRET` (ECS secret 주입, shadow 테스트에서는 `develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET` 사용)
+- secret: `SCRAPE_CALLBACK_HMAC_SECRET` (ECS secret 주입, shadow 테스트에서도 `arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy` 사용)
 - 로컬/수동 poll 모드 전용: `SQS_QUEUE_URL`, `SQS_POLL_WAIT_TIME_SECONDS`, `SQS_POLL_VISIBILITY_TIMEOUT_SECONDS`
 
 ### 콜백 HMAC 규약
@@ -78,6 +78,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 2) ECS task definition revision 등록(새 `IMAGE_URI`)
   - 3) EventBridge Pipe(`develop-shadow-scraper-jobs-to-ecs`) source batch 크기와 target env override를 함께 갱신
 - Pipe는 `BatchSize=1`, `MaximumBatchingWindowInSeconds=0`, `SQS_MESSAGE_BODY=$.body`, `SQS_MESSAGE_ID=$.messageId`를 유지한다.
+- task definition 렌더 단계에서 `SCRAPE_CALLBACK_HMAC_SECRET`는 반드시 Secrets Manager ARN으로 강제 주입/검증한다.
 - 배포 대상 리소스는 다음 shadow 기준과 일치해야 한다.
   - ECR repository: `develop-shadow-scraper-worker`
   - Pipe: `develop-shadow-scraper-jobs-to-ecs`

@@ -95,6 +95,7 @@
   - `X-Signature`: hex digest
 - 서명 원문(canonical string) 상수화:
   - `${timestamp}.${rawBody}`
+- `rawBody`는 실제 HTTP request body로 전송되는 `JSON.stringify(payload)` 결과 문자열과 완전히 동일해야 한다.
 - 비밀키는 환경변수에서 로드한다.
 
 ### 5) idempotency
@@ -178,6 +179,7 @@
 - `develop-shadow` 환경 E2E에서 ECS RunTask와 secret injection, log delivery는 정상 동작했다.
 - 초기 Pipe 설정의 `"$[0].body"`, `"$[0].messageId"`는 literal string으로 주입되어 워커 JSON parse가 실패했다.
 - 수정 후 기준은 per-record JSON path `$.body`, `$.messageId`이다.
+- shadow 태스크의 콜백 비밀키는 shadow secret(`develop-shadow/scraper/SCRAPE_CALLBACK_HMAC_SECRET`)과 일치해야 한다.
 
 ## 결과물 형식 (산출물 보고 템플릿)
 1. 변경 파일 목록

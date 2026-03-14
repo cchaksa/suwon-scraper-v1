@@ -9,6 +9,7 @@ env:
   ECR_REPOSITORY: develop-shadow-scraper-worker
   CONTAINER_NAME: worker
   PIPE_NAME: develop-shadow-scraper-jobs-to-ecs
+  SCRAPE_CALLBACK_HMAC_SECRET_ARN: arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy
 
 jobs:
   publish-image:
@@ -49,17 +50,62 @@ jobs:
       run: |
         set -euo pipefail
         IMAGE_URI="${{ steps.build-image.outputs.image_uri }}"
+        CALLBACK_SECRET_ARN="${{ env.SCRAPE_CALLBACK_HMAC_SECRET_ARN }}"
 
-        jq --arg image "$IMAGE_URI" --arg container "$CONTAINER_NAME" \
-          '.containerDefinitions |= map(if .name == $container then .image = $image else . end)' \
+        jq --arg image "$IMAGE_URI" --arg container "$CONTAINER_NAME" --arg callbackSecretArn "$CALLBACK_SECRET_ARN" \
+          '.containerDefinitions |= map(
+            if .name == $container then
+              .image = $image
+              | .secrets |= map(
+                  if .name == "SCRAPE_CALLBACK_HMAC_SECRET" then
+                    .valueFrom = $callbackSecretArn
+                  else
+                    .
+                  end
+                )
+            else
+              .
+            end
+          )' \
           task-definition.json > rendered-task-definition.json
+
+        RENDERED_SECRET_ARN=$(jq -r --arg container "$CONTAINER_NAME" '
+          .containerDefinitions[]
+          | select(.name == $container)
+          | .secrets[]
+          | select(.name == "SCRAPE_CALLBACK_HMAC_SECRET")
+          | .valueFrom
+        ' rendered-task-definition.json)
+
+        if [ "$RENDERED_SECRET_ARN" != "$CALLBACK_SECRET_ARN" ]; then
+          echo "Rendered secret ARN mismatch: expected=$CALLBACK_SECRET_ARN actual=$RENDERED_SECRET_ARN"
+          exit 1
+        fi
+
+        case "$RENDERED_SECRET_ARN" in
+          arn:aws:secretsmanager:*)
+            ;;
+          *)
+            echo "Rendered secret valueFrom must be a Secrets Manager ARN: actual=$RENDERED_SECRET_ARN"
+            exit 1
+            ;;
+        esac
 
         TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
           --cli-input-json file://rendered-task-definition.json \
           --query 'taskDefinition.taskDefinitionArn' \
           --output text)
 
-        aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" >/dev/null
+        REGISTERED_SECRET_ARN=$(aws ecs describe-task-definition \
+          --task-definition "$TASK_DEFINITION_ARN" \
+          --query "taskDefinition.containerDefinitions[?name=='$CONTAINER_NAME'].secrets[?name=='SCRAPE_CALLBACK_HMAC_SECRET'].valueFrom | [0][0]" \
+          --output text)
+
+        if [ "$REGISTERED_SECRET_ARN" != "$CALLBACK_SECRET_ARN" ]; then
+          echo "Registered task definition secret ARN mismatch: expected=$CALLBACK_SECRET_ARN actual=$REGISTERED_SECRET_ARN"
+          exit 1
+        fi
+
         echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
 
     - name: Update EventBridge Pipe target task definition

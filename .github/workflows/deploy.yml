@@ -96,10 +96,17 @@ jobs:
           --query 'taskDefinition.taskDefinitionArn' \
           --output text)
 
-        REGISTERED_SECRET_ARN=$(aws ecs describe-task-definition \
+        aws ecs describe-task-definition \
           --task-definition "$TASK_DEFINITION_ARN" \
-          --query "taskDefinition.containerDefinitions[?name=='$CONTAINER_NAME'].secrets[?name=='SCRAPE_CALLBACK_HMAC_SECRET'].valueFrom | [0][0]" \
-          --output text)
+          --output json > registered-task-definition.json
+
+        REGISTERED_SECRET_ARN=$(jq -r --arg container "$CONTAINER_NAME" '
+          .taskDefinition.containerDefinitions[]
+          | select(.name == $container)
+          | .secrets[]
+          | select(.name == "SCRAPE_CALLBACK_HMAC_SECRET")
+          | .valueFrom
+        ' registered-task-definition.json)
 
         if [ "$REGISTERED_SECRET_ARN" != "$CALLBACK_SECRET_ARN" ]; then
           echo "Registered task definition secret ARN mismatch: expected=$CALLBACK_SECRET_ARN actual=$REGISTERED_SECRET_ARN"

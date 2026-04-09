@@ -29,7 +29,7 @@
         },
         {
           "name": "SCRAPE_CALLBACK_TIMEOUT_MS",
-          "value": "5000"
+          "value": "25000"
         },
         {
           "name": "SCRAPE_CALLBACK_MAX_RETRIES",

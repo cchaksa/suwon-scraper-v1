@@ -59,7 +59,7 @@ function loadConfigFromEnv(): WorkerConfig {
     portalTimeoutMs: parsePositiveNumber(process.env.PORTAL_TIMEOUT_MS, 60000),
     totalTimeoutMs: parsePositiveNumber(process.env.WORKER_TOTAL_TIMEOUT_MS, 120000),
     gracefulShutdownMs: parsePositiveNumber(process.env.WORKER_GRACEFUL_SHUTDOWN_MS, 10000),
-    callbackTimeoutMs: parsePositiveNumber(process.env.SCRAPE_CALLBACK_TIMEOUT_MS, 5000),
+    callbackTimeoutMs: parsePositiveNumber(process.env.SCRAPE_CALLBACK_TIMEOUT_MS, 25000),
     callbackMaxRetries: parsePositiveNumber(process.env.SCRAPE_CALLBACK_MAX_RETRIES, 3),
     callbackBaseUrl: process.env.SCRAPE_CALLBACK_BASE_URL ?? "",
     callbackSecret: process.env.SCRAPE_CALLBACK_HMAC_SECRET ?? "",

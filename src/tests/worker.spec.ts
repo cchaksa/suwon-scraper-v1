@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runWorker, runWorkerFromEnvironment, runWorkerMessage, type WorkerConfig, type WorkerRuntimeDeps } from "../worker";
 import { ScrapeJobError } from "../services/scrapeErrors";
+import { ResultStorageError, type ResultStorageClient, type StoredResultDescriptor } from "../services/resultStorage";
 import type { WorkerCallbackPayload } from "../types/worker";
 
 function createConfig(): WorkerConfig {
@@ -13,6 +14,12 @@ function createConfig(): WorkerConfig {
     callbackMaxRetries: 3,
     callbackBaseUrl: "https://callback.example.com",
     callbackSecret: "secret",
+    resultBucket: "mock-result-bucket",
+    resultPrefix: "scrape-results/",
+    resultStorageClass: "STANDARD",
+    resultSseKmsKeyArn: undefined,
+    resultRetentionDays: 30,
+    resultRegion: "ap-northeast-2",
     sqsMessageBody: "",
     sqsMessageId: "msg-1",
     sqsQueueUrl: "https://sqs.ap-northeast-2.amazonaws.com/123456789012/worker-queue",
@@ -27,6 +34,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
   const callbackPayloads: WorkerCallbackPayload[] = [];
   let deleted = 0;
   let received = 0;
+  const storedDescriptors: StoredResultDescriptor[] = [];
 
   const deps: WorkerRuntimeDeps = {
     now: () => new Date("2026-03-03T12:00:00.000Z"),
@@ -63,6 +71,22 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
         deleted += 1;
       },
     },
+    resultStorage: {
+      put: async params => {
+        const descriptor: StoredResultDescriptor = {
+          bucket: "mock-result-bucket",
+          key: `scrape-results/${params.jobId}/mock-key.json`,
+          checksum: "mock-checksum",
+          contentLength: JSON.stringify(params.payload).length,
+          storedAt: "2026-03-03T12:00:00.000Z",
+          storageClass: "STANDARD",
+          attempt: params.attempt,
+          retentionDays: 30,
+        };
+        storedDescriptors.push(descriptor);
+        return descriptor;
+      },
+    } satisfies ResultStorageClient,
     ...overrides,
   };
 
@@ -71,12 +95,13 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
     callbackPayloads,
     getDeleteCount: () => deleted,
     getReceiveCount: () => received,
+    getStoredDescriptors: () => storedDescriptors,
   };
 }
 
 test("정상 처리 시 succeeded 콜백 1회", async () => {
   const config = createConfig();
-  const { deps, callbackPayloads } = createDeps();
+  const { deps, callbackPayloads, getStoredDescriptors } = createDeps();
   const raw = JSON.stringify({
     job_id: "job-1",
     user_id: "user-1",
@@ -88,7 +113,14 @@ test("정상 처리 시 succeeded 콜백 1회", async () => {
   const exitCode = await runWorkerMessage(raw, config, deps);
   assert.equal(exitCode, 0);
   assert.equal(callbackPayloads.length, 1);
+  assert.equal(getStoredDescriptors().length, 1);
   assert.equal(callbackPayloads[0].status, "succeeded");
+  if (callbackPayloads[0].status === "succeeded") {
+    assert.equal(callbackPayloads[0].result_s3_key, "scrape-results/job-1/mock-key.json");
+    assert.equal(callbackPayloads[0].result_checksum, "mock-checksum");
+    assert.equal(callbackPayloads[0].metadata.bucket, "mock-result-bucket");
+    assert.equal(callbackPayloads[0].metadata.upload_attempt, 1);
+  }
 });
 
 test("입력 스키마 오류(job_id 존재) 시 failed 콜백 전송", async () => {
@@ -109,6 +141,32 @@ test("입력 스키마 오류(job_id 존재) 시 failed 콜백 전송", async ()
   if (callbackPayloads[0].status === "failed") {
     assert.equal(callbackPayloads[0].error_code, "INVALID_PAYLOAD");
     assert.equal(callbackPayloads[0].retryable, false);
+  }
+});
+
+test("결과 업로드 실패 시 RESULT_UPLOAD_FAILED 콜백", async () => {
+  const config = createConfig();
+  const failingResultStorage: ResultStorageClient = {
+    put: async () => {
+      throw new ResultStorageError("s3 unavailable");
+    },
+  };
+  const { deps, callbackPayloads } = createDeps({ resultStorage: failingResultStorage });
+  const raw = JSON.stringify({
+    job_id: "job-upload-fail",
+    user_id: "user-upload-fail",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  const exitCode = await runWorkerMessage(raw, config, deps);
+  assert.equal(exitCode, 1);
+  assert.equal(callbackPayloads.length, 1);
+  assert.equal(callbackPayloads[0].status, "failed");
+  if (callbackPayloads[0].status === "failed") {
+    assert.equal(callbackPayloads[0].error_code, "RESULT_UPLOAD_FAILED");
+    assert.equal(callbackPayloads[0].retryable, true);
   }
 });
 
@@ -305,11 +363,19 @@ test("env/argv/queue 모두 없으면 INPUT_SOURCE_MISSING 종료", async () => 
   const prevCallbackSecret = process.env.SCRAPE_CALLBACK_HMAC_SECRET;
   const prevSqsBody = process.env.SQS_MESSAGE_BODY;
   const prevSqsQueueUrl = process.env.SQS_QUEUE_URL;
+  const prevResultBucket = process.env.SCRAPING_RESULT_BUCKET;
+  const prevResultPrefix = process.env.SCRAPING_RESULT_PREFIX;
+  const prevResultStorageClass = process.env.SCRAPING_RESULT_STORAGE_CLASS;
+  const prevResultRegion = process.env.SCRAPING_RESULT_REGION;
 
   try {
     process.env.NODE_ENV = "production";
     process.env.SCRAPE_CALLBACK_BASE_URL = "https://callback.example.com";
     process.env.SCRAPE_CALLBACK_HMAC_SECRET = "secret";
+    process.env.SCRAPING_RESULT_BUCKET = "mock-result-bucket";
+    process.env.SCRAPING_RESULT_PREFIX = "scrape-results/";
+    process.env.SCRAPING_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_REGION = "ap-northeast-2";
     delete process.env.SQS_MESSAGE_BODY;
     delete process.env.SQS_QUEUE_URL;
 
@@ -330,6 +396,18 @@ test("env/argv/queue 모두 없으면 INPUT_SOURCE_MISSING 종료", async () => 
 
     if (prevSqsQueueUrl === undefined) delete process.env.SQS_QUEUE_URL;
     else process.env.SQS_QUEUE_URL = prevSqsQueueUrl;
+
+    if (prevResultBucket === undefined) delete process.env.SCRAPING_RESULT_BUCKET;
+    else process.env.SCRAPING_RESULT_BUCKET = prevResultBucket;
+
+    if (prevResultPrefix === undefined) delete process.env.SCRAPING_RESULT_PREFIX;
+    else process.env.SCRAPING_RESULT_PREFIX = prevResultPrefix;
+
+    if (prevResultStorageClass === undefined) delete process.env.SCRAPING_RESULT_STORAGE_CLASS;
+    else process.env.SCRAPING_RESULT_STORAGE_CLASS = prevResultStorageClass;
+
+    if (prevResultRegion === undefined) delete process.env.SCRAPING_RESULT_REGION;
+    else process.env.SCRAPING_RESULT_REGION = prevResultRegion;
   }
 });
 
@@ -339,11 +417,19 @@ test("pipe 모드 환경 실행에서 env 메시지 누락 시 INPUT_SOURCE_MISS
   const prevInputMode = process.env.WORKER_INPUT_MODE;
   const prevSqsBody = process.env.SQS_MESSAGE_BODY;
   const prevSqsQueueUrl = process.env.SQS_QUEUE_URL;
+  const prevResultBucket = process.env.SCRAPING_RESULT_BUCKET;
+  const prevResultPrefix = process.env.SCRAPING_RESULT_PREFIX;
+  const prevResultStorageClass = process.env.SCRAPING_RESULT_STORAGE_CLASS;
+  const prevResultRegion = process.env.SCRAPING_RESULT_REGION;
 
   try {
     process.env.SCRAPE_CALLBACK_BASE_URL = "https://callback.example.com";
     process.env.SCRAPE_CALLBACK_HMAC_SECRET = "secret";
     process.env.WORKER_INPUT_MODE = "pipe";
+    process.env.SCRAPING_RESULT_BUCKET = "mock-result-bucket";
+    process.env.SCRAPING_RESULT_PREFIX = "scrape-results/";
+    process.env.SCRAPING_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_REGION = "ap-northeast-2";
     delete process.env.SQS_MESSAGE_BODY;
     process.env.SQS_QUEUE_URL = "https://sqs.ap-northeast-2.amazonaws.com/123456789012/worker-queue";
 
@@ -364,5 +450,17 @@ test("pipe 모드 환경 실행에서 env 메시지 누락 시 INPUT_SOURCE_MISS
 
     if (prevSqsQueueUrl === undefined) delete process.env.SQS_QUEUE_URL;
     else process.env.SQS_QUEUE_URL = prevSqsQueueUrl;
+
+    if (prevResultBucket === undefined) delete process.env.SCRAPING_RESULT_BUCKET;
+    else process.env.SCRAPING_RESULT_BUCKET = prevResultBucket;
+
+    if (prevResultPrefix === undefined) delete process.env.SCRAPING_RESULT_PREFIX;
+    else process.env.SCRAPING_RESULT_PREFIX = prevResultPrefix;
+
+    if (prevResultStorageClass === undefined) delete process.env.SCRAPING_RESULT_STORAGE_CLASS;
+    else process.env.SCRAPING_RESULT_STORAGE_CLASS = prevResultStorageClass;
+
+    if (prevResultRegion === undefined) delete process.env.SCRAPING_RESULT_REGION;
+    else process.env.SCRAPING_RESULT_REGION = prevResultRegion;
   }
 });

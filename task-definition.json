@@ -46,6 +46,30 @@
         {
           "name": "PORTAL_TIMEOUT_MS",
           "value": "60000"
+        },
+        {
+          "name": "SCRAPING_RESULT_BUCKET",
+          "value": "cck-develop-shadow-scrape-results-984762359128"
+        },
+        {
+          "name": "SCRAPING_RESULT_PREFIX",
+          "value": "develop-shadow/"
+        },
+        {
+          "name": "SCRAPING_RESULT_STORAGE_CLASS",
+          "value": "STANDARD"
+        },
+        {
+          "name": "SCRAPING_RESULT_KMS_KEY_ARN",
+          "value": ""
+        },
+        {
+          "name": "SCRAPING_RESULT_RETENTION_DAYS",
+          "value": "30"
+        },
+        {
+          "name": "SCRAPING_RESULT_REGION",
+          "value": "ap-northeast-2"
         }
       ],
       "secrets": [

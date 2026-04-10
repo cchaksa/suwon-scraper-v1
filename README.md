@@ -41,6 +41,13 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `5xx/timeout/network`는 재시도 대상
 - `4xx`(409 제외)는 비재시도 실패
 
+### 콜백 페이로드 구조
+- 성공 콜백은 원문 데이터를 바로 전달하지 않고 S3 객체 메타데이터를 포함한다.
+  - `result_s3_key`, `result_checksum`, `metadata(bucket, content_length, storage_class, upload_attempt, stored_at, requested_at?, retention_days?)`
+  - 백엔드는 해당 키를 이용해 원본 JSON을 재다운로드한다.
+- 실패 콜백은 기존과 동일하게 `error_code`, `error_message`, `retryable` 값을 전달한다.
+- S3 업로드에 실패하면 워커는 `RESULT_UPLOAD_FAILED` 오류로 콜백한다.
+
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 
 | Method | Endpoint  | Request Body                                      | Description          |
@@ -56,6 +63,13 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `SCRAPE_CALLBACK_BASE_URL=https://dev.api.cchaksa.com` (`develop-shadow-*` 경로에서 dev 테스트를 위한 의도된 설정)
 - `SCRAPE_CALLBACK_TIMEOUT_MS=25000`
 - `SCRAPE_CALLBACK_MAX_RETRIES=3`
+- `SCRAPING_RESULT_BUCKET` (필수, 예: `cck-develop-shadow-scrape-results-984762359128`)
+- `SCRAPING_RESULT_PREFIX=develop-shadow/`
+- `SCRAPING_RESULT_STORAGE_CLASS=STANDARD`
+- `SCRAPING_RESULT_KMS_KEY_ARN` (선택, 미지정 시 AES256)
+- `SCRAPING_RESULT_RETENTION_DAYS` (선택, 메타데이터 기록용)
+- `SCRAPING_RESULT_REGION=ap-northeast-2` (S3 전용 리전)
+- ECS Task Role에는 최소한 `s3:PutObject`, `s3:GetObject`, `s3:AbortMultipartUpload`, `s3:ListBucket` 권한을 `SCRAPING_RESULT_BUCKET` prefix 범위로 허용해야 한다.
 - `WORKER_TOTAL_TIMEOUT_MS=120000`
 - `WORKER_GRACEFUL_SHUTDOWN_MS=10000`
 - `PORTAL_TIMEOUT_MS=60000`

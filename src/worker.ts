@@ -1,6 +1,11 @@
 import { CallbackClient } from "./services/callbackClient";
 import { classifyWorkerError } from "./services/errorClassifier";
 import { hashRawPayload, parseJsonPayload, validateWorkerJobInput } from "./services/payloadValidator";
+import {
+  createResultStorageClient,
+  type ResultStorageClient,
+  type StoredResultDescriptor,
+} from "./services/resultStorage";
 import { scrapeJob } from "./services/scrapeJob";
 import { createSqsInputClient, type SqsInputClient } from "./services/sqsInput";
 import { logger } from "./utils/logger";
@@ -24,6 +29,12 @@ export interface WorkerConfig {
   callbackMaxRetries: number;
   callbackBaseUrl: string;
   callbackSecret: string;
+  resultBucket: string;
+  resultPrefix: string;
+  resultStorageClass: string;
+  resultSseKmsKeyArn?: string;
+  resultRetentionDays?: number;
+  resultRegion: string;
   sqsMessageBody?: string;
   sqsMessageId?: string;
   sqsQueueUrl?: string;
@@ -38,6 +49,7 @@ export interface WorkerRuntimeDeps {
   callbackClient: CallbackClient;
   scrapeFn: typeof scrapeJob;
   sqsInputClient: SqsInputClient;
+  resultStorage: ResultStorageClient;
 }
 
 function parsePositiveNumber(raw: string | undefined, fallback: number): number {
@@ -63,6 +75,19 @@ function loadConfigFromEnv(): WorkerConfig {
     callbackMaxRetries: parsePositiveNumber(process.env.SCRAPE_CALLBACK_MAX_RETRIES, 3),
     callbackBaseUrl: process.env.SCRAPE_CALLBACK_BASE_URL ?? "",
     callbackSecret: process.env.SCRAPE_CALLBACK_HMAC_SECRET ?? "",
+    resultBucket: process.env.SCRAPING_RESULT_BUCKET ?? process.env.SCRAPE_RESULT_BUCKET ?? "",
+    resultPrefix: (process.env.SCRAPING_RESULT_PREFIX ?? process.env.SCRAPE_RESULT_PREFIX ?? "scrape-results/").replace(
+      /\s+/g,
+      ""
+    ),
+    resultStorageClass: process.env.SCRAPING_RESULT_STORAGE_CLASS ?? process.env.SCRAPE_RESULT_STORAGE_CLASS ?? "STANDARD",
+    resultSseKmsKeyArn: process.env.SCRAPING_RESULT_KMS_KEY_ARN ?? process.env.SCRAPE_RESULT_KMS_KEY_ARN,
+    resultRetentionDays:
+      parsePositiveInt(process.env.SCRAPING_RESULT_RETENTION_DAYS, 0) ||
+      parsePositiveInt(process.env.SCRAPE_RESULT_RETENTION_DAYS, 0) ||
+      undefined,
+    resultRegion:
+      process.env.SCRAPING_RESULT_REGION ?? process.env.AWS_REGION ?? process.env.SCRAPE_RESULT_REGION ?? "ap-northeast-2",
     sqsMessageBody: process.env.SQS_MESSAGE_BODY,
     sqsMessageId: process.env.SQS_MESSAGE_ID,
     sqsQueueUrl: process.env.SQS_QUEUE_URL,
@@ -87,6 +112,14 @@ function createRuntimeDeps(config: WorkerConfig): WorkerRuntimeDeps {
     callbackClient,
     scrapeFn: scrapeJob,
     sqsInputClient: createSqsInputClient(config.awsRegion),
+    resultStorage: createResultStorageClient({
+      bucket: config.resultBucket,
+      prefix: config.resultPrefix,
+      region: config.resultRegion,
+      storageClass: config.resultStorageClass,
+      kmsKeyArn: config.resultSseKmsKeyArn,
+      retentionDays: config.resultRetentionDays,
+    }),
   };
 }
 
@@ -96,6 +129,9 @@ function ensureCallbackConfig(config: WorkerConfig): void {
   }
   if (!config.callbackSecret) {
     throw new Error("SCRAPE_CALLBACK_HMAC_SECRET 환경변수가 필요합니다.");
+  }
+  if (!config.resultBucket) {
+    throw new Error("SCRAPING_RESULT_BUCKET 환경변수가 필요합니다.");
   }
 }
 
@@ -164,12 +200,37 @@ function buildFailurePayload(
   };
 }
 
-function buildSuccessPayload(jobId: string, now: Date, resultPayload: unknown): WorkerSuccessResult {
+function buildSuccessPayload(
+  jobId: string,
+  now: Date,
+  descriptor: StoredResultDescriptor,
+  requestedAt?: string
+): WorkerSuccessResult {
   return {
     job_id: jobId,
     status: "succeeded",
-    result_payload: resultPayload,
+    result_s3_key: descriptor.key,
+    result_checksum: descriptor.checksum,
+    metadata: {
+      bucket: descriptor.bucket,
+      content_length: descriptor.contentLength,
+      stored_at: descriptor.storedAt,
+      storage_class: descriptor.storageClass,
+      upload_attempt: descriptor.attempt,
+      requested_at: requestedAt,
+      retention_days: descriptor.retentionDays,
+    },
     finished_at: toIso(now),
+  };
+}
+
+function successResultMeta(payload: WorkerCallbackPayload): Record<string, unknown> {
+  if (payload.status !== "succeeded") {
+    return {};
+  }
+  return {
+    result_s3_key: payload.result_s3_key,
+    result_checksum: payload.result_checksum,
   };
 }
 
@@ -186,6 +247,7 @@ async function sendCallbackWithOptionalFinalAttempt(
       job_id: payload.job_id,
       error: error instanceof Error ? error.message : String(error),
       status: payload.status,
+      ...successResultMeta(payload),
     });
 
     if (!options.shutdownRequested) {
@@ -200,6 +262,7 @@ async function sendCallbackWithOptionalFinalAttempt(
       logger.error("마지막 콜백 시도 실패", {
         job_id: payload.job_id,
         error: finalError instanceof Error ? finalError.message : String(finalError),
+        ...successResultMeta(payload),
       });
       return false;
     }
@@ -215,6 +278,7 @@ async function handleValidatedJob(
 ): Promise<number> {
   let callbackPayload: WorkerCallbackPayload | null = null;
   let succeeded = false;
+  let successDescriptor: StoredResultDescriptor | null = null;
   let failedMeta: { error_code: string; retryable: boolean; error_message: string } | null = null;
   try {
     const result = await deps.scrapeFn({
@@ -224,7 +288,13 @@ async function handleValidatedJob(
       abortSignal,
       jobId: input.job_id,
     });
-    callbackPayload = buildSuccessPayload(input.job_id, deps.now(), result);
+    successDescriptor = await deps.resultStorage.put({
+      jobId: input.job_id,
+      requestedAt: input.requested_at,
+      payload: result,
+      attempt: 1,
+    });
+    callbackPayload = buildSuccessPayload(input.job_id, deps.now(), successDescriptor, input.requested_at);
     succeeded = true;
   } catch (error) {
     const classified = classifyWorkerError(error);
@@ -244,6 +314,7 @@ async function handleValidatedJob(
       error_code: "CALLBACK_DELIVERY_FAILED",
       retryable: true,
       error_message: "콜백 전송 실패",
+      ...successResultMeta(callbackPayload),
     });
     return 1;
   }
@@ -253,6 +324,7 @@ async function handleValidatedJob(
       job_id: input.job_id,
       sqs_message_id: config.sqsMessageId ?? null,
       duration_ms: Date.now() - startedAtMs,
+      result_s3_key: successDescriptor?.key ?? null,
     });
     return 0;
   }
@@ -345,6 +417,7 @@ export async function runWorkerMessage(
           error_code: "CALLBACK_DELIVERY_FAILED",
           retryable: true,
           error_message: "콜백 전송 실패",
+          ...successResultMeta(payload),
         });
         return 1;
       }
@@ -401,8 +474,8 @@ export async function runWorker(
 
 export async function runWorkerFromEnvironment(argvMessage?: string): Promise<number> {
   const config = loadConfigFromEnv();
-  const runtimeDeps = createRuntimeDeps(config);
   ensureCallbackConfig(config);
+  const runtimeDeps = createRuntimeDeps(config);
 
   try {
     return await runWorker(config, runtimeDeps, { argvMessage });
@@ -424,7 +497,6 @@ export async function runWorkerFromEnvironment(argvMessage?: string): Promise<nu
 
 if (require.main === module) {
   const config = loadConfigFromEnv();
-  const runtimeDeps = createRuntimeDeps(config);
   let forceExitTimer: NodeJS.Timeout | null = null;
   const shutdownController = new AbortController();
 
@@ -445,6 +517,7 @@ if (require.main === module) {
   (async () => {
     try {
       ensureCallbackConfig(config);
+      const runtimeDeps = createRuntimeDeps(config);
       const exitCode = await runWorker(config, runtimeDeps, {
         argvMessage: process.argv[2],
         externalAbortSignal: shutdownController.signal,

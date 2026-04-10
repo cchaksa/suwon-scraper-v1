@@ -1,4 +1,5 @@
 import { ScrapeJobError } from "./scrapeErrors";
+import { ResultStorageError } from "./resultStorage";
 import type { ClassifiedWorkerError } from "../types/worker";
 
 export function classifyWorkerError(error: unknown): ClassifiedWorkerError {
@@ -7,6 +8,14 @@ export function classifyWorkerError(error: unknown): ClassifiedWorkerError {
       error_code: error.errorCode,
       error_message: error.message,
       retryable: error.retryable,
+    };
+  }
+
+  if (error instanceof ResultStorageError) {
+    return {
+      error_code: "RESULT_UPLOAD_FAILED",
+      error_message: error.message,
+      retryable: true,
     };
   }
 

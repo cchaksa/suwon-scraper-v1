@@ -18,6 +18,7 @@
 - 런타임: Node.js + TypeScript + Express + Playwright
 - 배포: Docker 이미지 빌드 후 Amazon ECS(Fargate) 배포
 - 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`)에서 워커 이미지(ECR) 배포
+- 성공 워커 콜백은 S3(`SCRAPING_RESULT_BUCKET`)에 저장한 결과 JSON의 키(`result_s3_key`)와 checksum/메타데이터만 전달하며, 백엔드는 이 키로 원문을 조회한다.
 
 ## 3) 현재 저장소 구조(핵심)
 - `src/worker.ts`: ECS RunTask 비동기 워커 엔트리포인트
@@ -53,6 +54,7 @@
   - 외부 응답 누락/null 케이스 방어 로직
 - 병합 로직 변경 시 학기 키 규칙(`{year}-{semesterCode}`)과 과목 코드 기준 병합 규칙을 명확히 유지한다.
 - 타입 변경 시 관련 DTO, 서비스, 엔드포인트 응답 구조를 함께 맞춘다.
+- S3 결과 저장 규칙(`scrape-results/{job_id}/{timestamp}.json`)과 콜백 메타데이터(`result_s3_key`, `result_checksum`, `metadata.*`)를 항상 유지한다.
 
 ## 6) 배포 관련 주의사항
 - 워커 배포 파이프라인은 `main` push 트리거다.

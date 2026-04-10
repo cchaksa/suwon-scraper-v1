@@ -74,11 +74,19 @@
   - `retryable=false`
   - 즉시 실패 콜백 전송 후 종료
 
-### 3) 출력(콜백) 스키마
+-### 3) 출력(콜백) 스키마
 - 성공:
   - `job_id`
   - `status: "succeeded"`
-  - `result_payload`
+  - `result_s3_key`
+  - `result_checksum`
+  - `metadata.bucket`
+  - `metadata.content_length`
+  - `metadata.storage_class`
+  - `metadata.upload_attempt`
+  - `metadata.stored_at`
+  - `metadata.requested_at` (선택)
+  - `metadata.retention_days` (선택)
   - `finished_at`(ISO8601)
 - 실패:
   - `job_id`

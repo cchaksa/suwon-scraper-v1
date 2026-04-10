@@ -46,6 +46,26 @@
         {
           "name": "PORTAL_TIMEOUT_MS",
           "value": "60000"
+        },
+        {
+          "name": "SCRAPE_RESULT_BUCKET",
+          "value": "develop-shadow-scraper-results"
+        },
+        {
+          "name": "SCRAPE_RESULT_PREFIX",
+          "value": "scrape-results/"
+        },
+        {
+          "name": "SCRAPE_RESULT_STORAGE_CLASS",
+          "value": "STANDARD"
+        },
+        {
+          "name": "SCRAPE_RESULT_KMS_KEY_ARN",
+          "value": ""
+        },
+        {
+          "name": "SCRAPE_RESULT_RETENTION_DAYS",
+          "value": "30"
         }
       ],
       "secrets": [

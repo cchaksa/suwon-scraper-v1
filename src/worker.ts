@@ -34,6 +34,7 @@ export interface WorkerConfig {
   resultStorageClass: string;
   resultSseKmsKeyArn?: string;
   resultRetentionDays?: number;
+  resultRegion: string;
   sqsMessageBody?: string;
   sqsMessageId?: string;
   sqsQueueUrl?: string;
@@ -74,11 +75,19 @@ function loadConfigFromEnv(): WorkerConfig {
     callbackMaxRetries: parsePositiveNumber(process.env.SCRAPE_CALLBACK_MAX_RETRIES, 3),
     callbackBaseUrl: process.env.SCRAPE_CALLBACK_BASE_URL ?? "",
     callbackSecret: process.env.SCRAPE_CALLBACK_HMAC_SECRET ?? "",
-    resultBucket: process.env.SCRAPE_RESULT_BUCKET ?? "",
-    resultPrefix: (process.env.SCRAPE_RESULT_PREFIX ?? "scrape-results/").replace(/\s+/g, ""),
-    resultStorageClass: process.env.SCRAPE_RESULT_STORAGE_CLASS ?? "STANDARD",
-    resultSseKmsKeyArn: process.env.SCRAPE_RESULT_KMS_KEY_ARN,
-    resultRetentionDays: parsePositiveInt(process.env.SCRAPE_RESULT_RETENTION_DAYS, 0) || undefined,
+    resultBucket: process.env.SCRAPING_RESULT_BUCKET ?? process.env.SCRAPE_RESULT_BUCKET ?? "",
+    resultPrefix: (process.env.SCRAPING_RESULT_PREFIX ?? process.env.SCRAPE_RESULT_PREFIX ?? "scrape-results/").replace(
+      /\s+/g,
+      ""
+    ),
+    resultStorageClass: process.env.SCRAPING_RESULT_STORAGE_CLASS ?? process.env.SCRAPE_RESULT_STORAGE_CLASS ?? "STANDARD",
+    resultSseKmsKeyArn: process.env.SCRAPING_RESULT_KMS_KEY_ARN ?? process.env.SCRAPE_RESULT_KMS_KEY_ARN,
+    resultRetentionDays:
+      parsePositiveInt(process.env.SCRAPING_RESULT_RETENTION_DAYS, 0) ||
+      parsePositiveInt(process.env.SCRAPE_RESULT_RETENTION_DAYS, 0) ||
+      undefined,
+    resultRegion:
+      process.env.SCRAPING_RESULT_REGION ?? process.env.AWS_REGION ?? process.env.SCRAPE_RESULT_REGION ?? "ap-northeast-2",
     sqsMessageBody: process.env.SQS_MESSAGE_BODY,
     sqsMessageId: process.env.SQS_MESSAGE_ID,
     sqsQueueUrl: process.env.SQS_QUEUE_URL,
@@ -106,7 +115,7 @@ function createRuntimeDeps(config: WorkerConfig): WorkerRuntimeDeps {
     resultStorage: createResultStorageClient({
       bucket: config.resultBucket,
       prefix: config.resultPrefix,
-      region: config.awsRegion,
+      region: config.resultRegion,
       storageClass: config.resultStorageClass,
       kmsKeyArn: config.resultSseKmsKeyArn,
       retentionDays: config.resultRetentionDays,
@@ -122,7 +131,7 @@ function ensureCallbackConfig(config: WorkerConfig): void {
     throw new Error("SCRAPE_CALLBACK_HMAC_SECRET 환경변수가 필요합니다.");
   }
   if (!config.resultBucket) {
-    throw new Error("SCRAPE_RESULT_BUCKET 환경변수가 필요합니다.");
+    throw new Error("SCRAPING_RESULT_BUCKET 환경변수가 필요합니다.");
   }
 }
 

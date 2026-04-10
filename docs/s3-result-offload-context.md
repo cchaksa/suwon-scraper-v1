@@ -22,13 +22,13 @@
 - IAM(Task Role)은 현재 S3 PutObject 권한을 명시하지 않는다.
 
 ## 결정사항
-1. 결과 JSON은 `SCRAPE_RESULT_BUCKET`의 `SCRAPE_RESULT_PREFIX/{job_id}/{YYYYMMDDTHHmmssSSS}.json` 키에 저장한다.
+1. 결과 JSON은 `SCRAPING_RESULT_BUCKET`의 `SCRAPING_RESULT_PREFIX/{job_id}/{YYYYMMDDTHHmmssSSS}.json` 키에 저장한다.
 2. 기본 prefix는 `scrape-results/`, timestamp는 `requested_at` 기준 UTC compact 포맷이며, 유효하지 않을 경우 `now()`를 사용한다.
 3. 저장 후 콜백 payload는 `result_s3_key`, `result_checksum`, `metadata(bucket, content_length, storage_class, upload_attempt, stored_at, requested_at?, retention_days?)`만 포함한다.
 4. 업로드 실패는 `ResultStorageError`로 캡처하고 콜백 `error_code=RESULT_UPLOAD_FAILED`, `retryable=true`로 표준화한다.
 5. 로그는 업로드 성공/실패, 콜백 실패 시 `job_id`, `result_s3_key`, `checksum`, `attempt`를 모두 출력한다.
-6. 암호화: 기본 `AES256`, `SCRAPE_RESULT_KMS_KEY_ARN`이 설정되면 `aws:kms` + 해당 ARN을 사용한다.
-7. 보관 정책: `SCRAPE_RESULT_RETENTION_DAYS` 환경변수로 retention 정보를 메타데이터에 기록하고, 실제 만료는 S3 Lifecycle rule(예: 30일)로 관리한다.
+6. 암호화: 기본 `AES256`, `SCRAPING_RESULT_KMS_KEY_ARN`이 설정되면 `aws:kms` + 해당 ARN을 사용한다.
+7. 보관 정책: `SCRAPING_RESULT_RETENTION_DAYS` 환경변수로 retention 정보를 메타데이터에 기록하고, 실제 만료는 S3 Lifecycle rule(예: 30일)로 관리한다.
 
 ## 구현 계획
 1. `@aws-sdk/client-s3` 의존성 추가 및 `WorkerConfig`에 결과 저장 관련 env 로드/검증 추가.
@@ -42,7 +42,7 @@
 - `yarn build` (tsc) 성공 여부 확인.
 - `yarn test`를 통해 worker, errorClassifier, callback 경로 회귀.
 - 워커 단위 테스트에서 성공 콜백이 S3 키/메타데이터를 포함하는지, 업로드 실패 시 `RESULT_UPLOAD_FAILED`를 반환하는지 확인.
-- 로컬에서 `SCRAPE_RESULT_BUCKET` 미설정 시 프로세스가 즉시 실패하는지 확인.
+- 로컬에서 `SCRAPING_RESULT_BUCKET` 미설정 시 프로세스가 즉시 실패하는지 확인.
 
 ## 리스크 및 롤백 포인트
 - S3 PutObject 권한이 누락되면 모든 작업이 `RESULT_UPLOAD_FAILED`로 실패하므로 IAM 업데이트가 필요하다.

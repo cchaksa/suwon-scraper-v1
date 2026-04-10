@@ -19,6 +19,7 @@ function createConfig(): WorkerConfig {
     resultStorageClass: "STANDARD",
     resultSseKmsKeyArn: undefined,
     resultRetentionDays: 30,
+    resultRegion: "ap-northeast-2",
     sqsMessageBody: "",
     sqsMessageId: "msg-1",
     sqsQueueUrl: "https://sqs.ap-northeast-2.amazonaws.com/123456789012/worker-queue",
@@ -362,17 +363,19 @@ test("env/argv/queue 모두 없으면 INPUT_SOURCE_MISSING 종료", async () => 
   const prevCallbackSecret = process.env.SCRAPE_CALLBACK_HMAC_SECRET;
   const prevSqsBody = process.env.SQS_MESSAGE_BODY;
   const prevSqsQueueUrl = process.env.SQS_QUEUE_URL;
-  const prevResultBucket = process.env.SCRAPE_RESULT_BUCKET;
-  const prevResultPrefix = process.env.SCRAPE_RESULT_PREFIX;
-  const prevResultStorageClass = process.env.SCRAPE_RESULT_STORAGE_CLASS;
+  const prevResultBucket = process.env.SCRAPING_RESULT_BUCKET;
+  const prevResultPrefix = process.env.SCRAPING_RESULT_PREFIX;
+  const prevResultStorageClass = process.env.SCRAPING_RESULT_STORAGE_CLASS;
+  const prevResultRegion = process.env.SCRAPING_RESULT_REGION;
 
   try {
     process.env.NODE_ENV = "production";
     process.env.SCRAPE_CALLBACK_BASE_URL = "https://callback.example.com";
     process.env.SCRAPE_CALLBACK_HMAC_SECRET = "secret";
-    process.env.SCRAPE_RESULT_BUCKET = "mock-result-bucket";
-    process.env.SCRAPE_RESULT_PREFIX = "scrape-results/";
-    process.env.SCRAPE_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_BUCKET = "mock-result-bucket";
+    process.env.SCRAPING_RESULT_PREFIX = "scrape-results/";
+    process.env.SCRAPING_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_REGION = "ap-northeast-2";
     delete process.env.SQS_MESSAGE_BODY;
     delete process.env.SQS_QUEUE_URL;
 
@@ -394,14 +397,17 @@ test("env/argv/queue 모두 없으면 INPUT_SOURCE_MISSING 종료", async () => 
     if (prevSqsQueueUrl === undefined) delete process.env.SQS_QUEUE_URL;
     else process.env.SQS_QUEUE_URL = prevSqsQueueUrl;
 
-    if (prevResultBucket === undefined) delete process.env.SCRAPE_RESULT_BUCKET;
-    else process.env.SCRAPE_RESULT_BUCKET = prevResultBucket;
+    if (prevResultBucket === undefined) delete process.env.SCRAPING_RESULT_BUCKET;
+    else process.env.SCRAPING_RESULT_BUCKET = prevResultBucket;
 
-    if (prevResultPrefix === undefined) delete process.env.SCRAPE_RESULT_PREFIX;
-    else process.env.SCRAPE_RESULT_PREFIX = prevResultPrefix;
+    if (prevResultPrefix === undefined) delete process.env.SCRAPING_RESULT_PREFIX;
+    else process.env.SCRAPING_RESULT_PREFIX = prevResultPrefix;
 
-    if (prevResultStorageClass === undefined) delete process.env.SCRAPE_RESULT_STORAGE_CLASS;
-    else process.env.SCRAPE_RESULT_STORAGE_CLASS = prevResultStorageClass;
+    if (prevResultStorageClass === undefined) delete process.env.SCRAPING_RESULT_STORAGE_CLASS;
+    else process.env.SCRAPING_RESULT_STORAGE_CLASS = prevResultStorageClass;
+
+    if (prevResultRegion === undefined) delete process.env.SCRAPING_RESULT_REGION;
+    else process.env.SCRAPING_RESULT_REGION = prevResultRegion;
   }
 });
 
@@ -411,17 +417,19 @@ test("pipe 모드 환경 실행에서 env 메시지 누락 시 INPUT_SOURCE_MISS
   const prevInputMode = process.env.WORKER_INPUT_MODE;
   const prevSqsBody = process.env.SQS_MESSAGE_BODY;
   const prevSqsQueueUrl = process.env.SQS_QUEUE_URL;
-  const prevResultBucket = process.env.SCRAPE_RESULT_BUCKET;
-  const prevResultPrefix = process.env.SCRAPE_RESULT_PREFIX;
-  const prevResultStorageClass = process.env.SCRAPE_RESULT_STORAGE_CLASS;
+  const prevResultBucket = process.env.SCRAPING_RESULT_BUCKET;
+  const prevResultPrefix = process.env.SCRAPING_RESULT_PREFIX;
+  const prevResultStorageClass = process.env.SCRAPING_RESULT_STORAGE_CLASS;
+  const prevResultRegion = process.env.SCRAPING_RESULT_REGION;
 
   try {
     process.env.SCRAPE_CALLBACK_BASE_URL = "https://callback.example.com";
     process.env.SCRAPE_CALLBACK_HMAC_SECRET = "secret";
     process.env.WORKER_INPUT_MODE = "pipe";
-    process.env.SCRAPE_RESULT_BUCKET = "mock-result-bucket";
-    process.env.SCRAPE_RESULT_PREFIX = "scrape-results/";
-    process.env.SCRAPE_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_BUCKET = "mock-result-bucket";
+    process.env.SCRAPING_RESULT_PREFIX = "scrape-results/";
+    process.env.SCRAPING_RESULT_STORAGE_CLASS = "STANDARD";
+    process.env.SCRAPING_RESULT_REGION = "ap-northeast-2";
     delete process.env.SQS_MESSAGE_BODY;
     process.env.SQS_QUEUE_URL = "https://sqs.ap-northeast-2.amazonaws.com/123456789012/worker-queue";
 
@@ -443,13 +451,16 @@ test("pipe 모드 환경 실행에서 env 메시지 누락 시 INPUT_SOURCE_MISS
     if (prevSqsQueueUrl === undefined) delete process.env.SQS_QUEUE_URL;
     else process.env.SQS_QUEUE_URL = prevSqsQueueUrl;
 
-    if (prevResultBucket === undefined) delete process.env.SCRAPE_RESULT_BUCKET;
-    else process.env.SCRAPE_RESULT_BUCKET = prevResultBucket;
+    if (prevResultBucket === undefined) delete process.env.SCRAPING_RESULT_BUCKET;
+    else process.env.SCRAPING_RESULT_BUCKET = prevResultBucket;
 
-    if (prevResultPrefix === undefined) delete process.env.SCRAPE_RESULT_PREFIX;
-    else process.env.SCRAPE_RESULT_PREFIX = prevResultPrefix;
+    if (prevResultPrefix === undefined) delete process.env.SCRAPING_RESULT_PREFIX;
+    else process.env.SCRAPING_RESULT_PREFIX = prevResultPrefix;
 
-    if (prevResultStorageClass === undefined) delete process.env.SCRAPE_RESULT_STORAGE_CLASS;
-    else process.env.SCRAPE_RESULT_STORAGE_CLASS = prevResultStorageClass;
+    if (prevResultStorageClass === undefined) delete process.env.SCRAPING_RESULT_STORAGE_CLASS;
+    else process.env.SCRAPING_RESULT_STORAGE_CLASS = prevResultStorageClass;
+
+    if (prevResultRegion === undefined) delete process.env.SCRAPING_RESULT_REGION;
+    else process.env.SCRAPING_RESULT_REGION = prevResultRegion;
   }
 });

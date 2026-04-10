@@ -48,24 +48,28 @@
           "value": "60000"
         },
         {
-          "name": "SCRAPE_RESULT_BUCKET",
-          "value": "develop-shadow-scraper-results"
+          "name": "SCRAPING_RESULT_BUCKET",
+          "value": "cck-develop-shadow-scrape-results-984762359128"
         },
         {
-          "name": "SCRAPE_RESULT_PREFIX",
-          "value": "scrape-results/"
+          "name": "SCRAPING_RESULT_PREFIX",
+          "value": "develop-shadow/"
         },
         {
-          "name": "SCRAPE_RESULT_STORAGE_CLASS",
+          "name": "SCRAPING_RESULT_STORAGE_CLASS",
           "value": "STANDARD"
         },
         {
-          "name": "SCRAPE_RESULT_KMS_KEY_ARN",
+          "name": "SCRAPING_RESULT_KMS_KEY_ARN",
           "value": ""
         },
         {
-          "name": "SCRAPE_RESULT_RETENTION_DAYS",
+          "name": "SCRAPING_RESULT_RETENTION_DAYS",
           "value": "30"
+        },
+        {
+          "name": "SCRAPING_RESULT_REGION",
+          "value": "ap-northeast-2"
         }
       ],
       "secrets": [

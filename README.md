@@ -61,7 +61,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `AWS_REGION=ap-northeast-2`
 - `WORKER_INPUT_MODE=pipe`
 - `SCRAPE_CALLBACK_BASE_URL=https://dev.api.cchaksa.com` (`develop-shadow-*` 경로에서 dev 테스트를 위한 의도된 설정)
-- `SCRAPE_CALLBACK_TIMEOUT_MS=25000`
+- `SCRAPE_CALLBACK_TIMEOUT_MS=60000`
 - `SCRAPE_CALLBACK_MAX_RETRIES=3`
 - `SCRAPING_RESULT_BUCKET` (필수, 예: `cck-develop-shadow-scrape-results-984762359128`)
 - `SCRAPING_RESULT_PREFIX=develop-shadow/`

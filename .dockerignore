@@ -1,0 +1,17 @@
+.git
+.github
+.serverless
+.vscode
+dist
+docs
+layer
+node_modules
+
+AGENTS.md
+README.md
+task-definition.json
+
+.DS_Store
+*.log
+
+src/tests

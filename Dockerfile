@@ -1,28 +1,28 @@
-FROM mcr.microsoft.com/playwright:v1.41.2-focal AS base
+FROM node:20-bookworm-slim AS node-base
 
 WORKDIR /app
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-FROM base AS prod-deps
+FROM node-base AS prod-deps
 
 COPY package.json yarn.lock ./
 
-RUN yarn install --frozen-lockfile --production=true \
+RUN yarn install --frozen-lockfile --production --non-interactive \
   && yarn cache clean
 
-FROM base AS builder
+FROM node-base AS builder
 
 COPY package.json yarn.lock tsconfig.json tsconfig.runtime.json ./
 
-RUN yarn install --frozen-lockfile \
+RUN yarn install --frozen-lockfile --non-interactive \
   && yarn cache clean
 
 COPY src ./src
 
 RUN yarn build:runtime
 
-FROM base AS runtime
+FROM mcr.microsoft.com/playwright:v1.41.2-focal AS runtime
 
 ENV NODE_ENV=production
 

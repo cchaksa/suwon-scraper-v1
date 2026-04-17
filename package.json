@@ -4,15 +4,15 @@
   "license": "MIT",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc",
-    "build:runtime": "npm run clean && tsc -p tsconfig.runtime.json",
+    "build": "yarn clean && tsc",
+    "build:runtime": "yarn clean && tsc -p tsconfig.runtime.json",
     "start": "node dist/worker.js",
     "start:worker": "node dist/worker.js",
     "start:server": "node dist/server.js",
     "dev": "ts-node src/worker.ts",
     "dev:worker": "ts-node src/worker.ts",
     "dev:server": "ts-node src/server.ts",
-    "test": "npm run build && node --test dist/tests/*.js"
+    "test": "yarn build && node --test dist/tests/*.js"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.879.0",

@@ -31,6 +31,7 @@
 ## 결정사항
 - base 이미지는 `mcr.microsoft.com/playwright:v1.41.2-focal`로 유지한다.
 - `prod-deps`, `builder`, `runtime` 3단계 multi-stage build를 적용한다.
+- intermediate stage(`prod-deps`, `builder`)는 `node:20-bookworm-slim`을 사용해 CI/CD build 부담을 줄이고, 최종 runtime만 Playwright 이미지를 사용한다.
 - Docker runtime 빌드는 `tsconfig.runtime.json`을 사용해 `src/tests/**/*`를 제외한다.
 - runtime dependency는 `playwright-core@1.41.2` 포함 production dependency만 유지한다.
 - `.dockerignore`로 이미지 빌드에 불필요한 파일을 context 단계에서 제외한다.

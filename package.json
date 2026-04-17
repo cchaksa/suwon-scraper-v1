@@ -5,6 +5,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc",
+    "build:runtime": "npm run clean && tsc -p tsconfig.runtime.json",
     "start": "node dist/worker.js",
     "start:worker": "node dist/worker.js",
     "start:server": "node dist/server.js",
@@ -17,10 +18,8 @@
     "@aws-sdk/client-sqs": "^3.879.0",
     "@aws-sdk/client-s3": "^3.879.0",
     "express": "^4.18.2",
-    "playwright-core": "1.41.0",
-    "cors": "^2.8.5",
-    "@playwright/test": "1.41.2",
-    "playwright": "1.41.2"
+    "playwright-core": "1.41.2",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.130",

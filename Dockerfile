@@ -1,19 +1,33 @@
-# 최신 안정 버전 사용
-FROM mcr.microsoft.com/playwright:v1.41.2-focal
+FROM mcr.microsoft.com/playwright:v1.41.2-focal AS base
 
 WORKDIR /app
 
-# 패키지 파일 복사
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+FROM base AS prod-deps
+
 COPY package.json yarn.lock ./
 
-# 의존성 설치
-RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --production=true \
+  && yarn cache clean
 
-# 소스 코드 복사
-COPY . .
+FROM base AS builder
 
-# TypeScript 빌드
-RUN yarn build
+COPY package.json yarn.lock tsconfig.json tsconfig.runtime.json ./
 
-# 워커 실행 명령 (start = node dist/worker.js)
-CMD ["yarn", "start"]
+RUN yarn install --frozen-lockfile \
+  && yarn cache clean
+
+COPY src ./src
+
+RUN yarn build:runtime
+
+FROM base AS runtime
+
+ENV NODE_ENV=production
+
+COPY package.json ./
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+CMD ["node", "dist/worker.js"]

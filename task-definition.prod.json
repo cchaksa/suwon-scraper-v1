@@ -1,0 +1,79 @@
+{
+  "family": "prod-scraper-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::984762359128:role/prod-scraper-worker-exec-role",
+  "taskRoleArn": "arn:aws:iam::984762359128:role/prod-scraper-worker-task-role",
+  "containerDefinitions": [
+    {
+      "name": "worker",
+      "image": "${IMAGE_URI}",
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "ap-northeast-2"
+        },
+        {
+          "name": "WORKER_INPUT_MODE",
+          "value": "pipe"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_BASE_URL",
+          "value": "https://api.cchaksa.com"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_TIMEOUT_MS",
+          "value": "5000"
+        },
+        {
+          "name": "SCRAPE_CALLBACK_MAX_RETRIES",
+          "value": "3"
+        },
+        {
+          "name": "WORKER_TOTAL_TIMEOUT_MS",
+          "value": "120000"
+        },
+        {
+          "name": "WORKER_GRACEFUL_SHUTDOWN_MS",
+          "value": "10000"
+        },
+        {
+          "name": "PORTAL_TIMEOUT_MS",
+          "value": "60000"
+        },
+        {
+          "name": "SCRAPING_RESULT_BUCKET",
+          "value": "cck-prod-scrape-results-984762359128"
+        },
+        {
+          "name": "SCRAPING_RESULT_PREFIX",
+          "value": "prod/"
+        },
+        {
+          "name": "SCRAPING_RESULT_REGION",
+          "value": "ap-northeast-2"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SCRAPE_CALLBACK_HMAC_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/prod-scraper-worker",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

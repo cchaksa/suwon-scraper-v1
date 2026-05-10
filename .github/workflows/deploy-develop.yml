@@ -1,0 +1,56 @@
+name: Deploy Develop Worker
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  CONTAINER_NAME: worker
+  DEPLOY_ENVIRONMENT: develop-shadow
+  ECR_REPOSITORY: develop-shadow-scraper-worker
+  PIPE_NAME: develop-shadow-scraper-jobs-to-ecs
+  TASK_DEFINITION_FILE: task-definition.json
+  SCRAPE_CALLBACK_HMAC_SECRET_ARN: arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy
+
+jobs:
+  publish-image:
+    # This pipeline deploys worker changes without Terraform apply:
+    # 1) ECR push -> 2) ECS task definition revision register -> 3) EventBridge Pipe target update
+    runs-on: ubuntu-latest
+    environment: develop-shadow
+    outputs:
+      image_uri: ${{ steps.deploy-worker.outputs.image_uri }}
+      task_definition_arn: ${{ steps.deploy-worker.outputs.task_definition_arn }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Deploy worker image and update pipe
+      id: deploy-worker
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+        GIT_REF_NAME: ${{ github.ref_name }}
+        CALLBACK_SECRET_ARN: ${{ env.SCRAPE_CALLBACK_HMAC_SECRET_ARN }}
+      run: bash .github/scripts/deploy-worker.sh
+
+    - name: Upload IMAGE_URI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: worker-deployment-output
+        path: |
+          image-uri.txt
+          deployment-output.json
+        retention-days: 7
+

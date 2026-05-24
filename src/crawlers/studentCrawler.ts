@@ -45,5 +45,6 @@ export async function scrapeStudent(page: Page, username: string): Promise<Stude
     studGrde: studentInfo.studGrde,
     enscDvcd: studentInfo.enscDvcd,
     facSmrCnt: parseInt(studentInfo.facSmrCnt) || 0,
+    flangPassGb: studentInfo.flangPassGb,
   };
 }

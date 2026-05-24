@@ -17,5 +17,6 @@ export interface StudentDTO {
     studGrde: number; // 학년 (예: 3)
     enscDvcd: string; // 입학 구분 코드 (예: 1: 신입학, 2: 편입학)
     facSmrCnt: number; // 총 이수학기
+    flangPassGb?: string; // 외국어 인증 (예: 통과/미통과)
   }
   

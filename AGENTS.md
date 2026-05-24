@@ -17,7 +17,7 @@
 - 목적: 수원대학교 포털/학사 시스템에서 학생 정보, 수강 정보, 성적 정보를 크롤링해 API로 제공
 - 런타임: Node.js + TypeScript + Express + Playwright
 - 배포: Docker 이미지 빌드 후 Amazon ECS(Fargate) 배포
-- 자동 배포: `main` 브랜치 push 시 GitHub Actions(`.github/workflows/deploy.yml`)에서 워커 이미지(ECR) 배포
+- 배포: GitHub Actions 수동 실행에서 develop/prod workflow를 선택하고, 실행 화면에서 브랜치 선택
 - 성공 워커 콜백은 S3(`SCRAPING_RESULT_BUCKET`)에 저장한 결과 JSON의 키(`result_s3_key`)와 checksum/메타데이터만 전달하며, 백엔드는 이 키로 원문을 조회한다.
 
 ## 3) 현재 저장소 구조(핵심)
@@ -32,8 +32,11 @@
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
-- `.github/workflows/deploy.yml`: ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신
-- `task-definition.json`: ECS task 정의
+- `.github/workflows/deploy-develop.yml`: develop-shadow ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신
+- `.github/workflows/deploy-prod.yml`: prod ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신
+- `.github/scripts/deploy-worker.sh`: develop/prod workflow 공용 배포 스크립트
+- `task-definition.json`: develop-shadow ECS task 정의
+- `task-definition.prod.json`: prod ECS task 정의
 - `layer/nodejs/*`, `.serverless/*`: Lambda/Serverless 관련 산출물/의존성(현재 ECS 배포와 별도 히스토리 영역)
 
 ## 4) 개발/실행 명령어
@@ -57,21 +60,33 @@
 - S3 결과 저장 규칙(`scrape-results/{job_id}/{timestamp}.json`)과 콜백 메타데이터(`result_s3_key`, `result_checksum`, `metadata.*`)를 항상 유지한다.
 
 ## 6) 배포 관련 주의사항
-- 워커 배포 파이프라인은 `main` push 트리거다.
-- `.github/workflows/deploy.yml`는 ECS 서비스 업데이트를 수행하지 않는다.
+- 워커 배포 파이프라인은 자동 push 트리거를 사용하지 않고 수동 실행(`workflow_dispatch`)만 지원한다.
+- develop 배포는 `.github/workflows/deploy-develop.yml`, prod 배포는 `.github/workflows/deploy-prod.yml`에서 수행한다.
+- 배포할 코드는 GitHub Actions `Run workflow` 화면의 브랜치 선택으로 결정한다.
+- 배포 workflow는 ECS 서비스 업데이트를 수행하지 않는다.
 - 배포 순서는 `ECR push -> ECS register-task-definition -> EventBridge Pipe update`로 유지한다.
-- 현재 dev 테스트 단계에서는 운영 계정 내부 shadow 리소스만 갱신한다.
+- `.github/scripts/deploy-worker.sh`는 두 workflow 공용 스크립트이므로 대상별 리소스 값은 각 workflow env에서 관리한다.
 - shadow 리소스 기준:
   - ECR repository: `develop-shadow-scraper-worker`
   - Pipe: `develop-shadow-scraper-jobs-to-ecs`
   - Task family: `develop-shadow-scraper-worker`
   - Container name: `worker`
   - CloudWatch log group: `/ecs/develop-shadow-scraper-worker`
+- prod 리소스 기준:
+  - ECR repository: `prod-scraper-worker`
+  - Pipe: `prod-scraper-jobs-to-ecs`
+  - Task family: `prod-scraper-worker`
+  - Container name: `worker`
+  - CloudWatch log group: `/ecs/prod-scraper-worker`
+  - S3 result bucket: `cck-prod-scrape-results-984762359128`
+  - S3 result prefix: `prod/`
+  - Callback base URL: `https://api.cchaksa.com`
 - 운영 태스크 입력은 `WORKER_INPUT_MODE=pipe` + Pipe env override(`SQS_MESSAGE_BODY`, `SQS_MESSAGE_ID`)를 기준으로 관리한다.
 - Pipe env override 값은 SQS source 기준 per-record JSON path(`$.body`, `$.messageId`)를 사용한다.
 - 운영 task definition에는 `SQS_QUEUE_URL`을 두지 않고, poll 모드는 로컬/수동 실행 전용으로 본다.
 - `SCRAPE_CALLBACK_BASE_URL=https://dev.api.cchaksa.com`는 shadow 경로 dev 테스트를 위한 의도된 설정으로 본다.
-- shadow task definition의 `SCRAPE_CALLBACK_HMAC_SECRET`는 short name이 아니라 Secrets Manager ARN을 사용해야 한다.
+- prod task definition의 `SCRAPE_CALLBACK_BASE_URL`는 `https://api.cchaksa.com`로 유지한다.
+- task definition의 `SCRAPE_CALLBACK_HMAC_SECRET`는 short name이 아니라 Secrets Manager ARN을 사용해야 한다.
 - 현재 기준 값은 `arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy`다.
 - 콜백 HMAC 규약은 `HMAC-SHA256`, canonical string `${timestamp}.${rawBody}`, `X-Timestamp`, `X-Signature(hex)`로 고정한다.
 - CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.

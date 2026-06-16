@@ -22,9 +22,10 @@
 
 ## 3) 현재 저장소 구조(핵심)
 - `src/worker.ts`: ECS RunTask 비동기 워커 엔트리포인트
-- `src/server.ts`: legacy Express 엔트리포인트(`/auth`, `/scrape`, `/health`)
+- `src/server.ts`: legacy Express 엔트리포인트(`/login`, `/auth`, `/scrape`, `/health`)
 - `src/crawlers/*`: 학생/수강/성적 크롤링 API 호출
 - `src/services/scrapeJob.ts`: 워커/legacy 서버 공용 스크래핑 코어 로직
+- `src/services/portalLogin.ts`: 포털 로그인 및 학사 시스템 세션 핸드오프 공용 로직
 - `src/services/callbackClient.ts`: 내부 콜백 API 전송(HMAC/재시도)
 - `src/services/payloadValidator.ts`: 워커 입력 스키마 검증
 - `src/services/merge.ts`: 성적(Credit) + 수강(Course) 학기별 병합
@@ -97,6 +98,7 @@
 2. `yarn build` 성공 여부 확인
 3. API 변경 시 최소 엔드포인트 수준 점검
    - `GET /health`
+   - `POST /login` 로그인 검증/오류 분기
    - `POST /auth` 입력 검증/오류 메시지
    - `POST /scrape` 입력 검증/오류 분기
 4. 문서/타입/로직 불일치 여부 확인

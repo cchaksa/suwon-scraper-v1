@@ -52,7 +52,8 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 
 | Method | Endpoint  | Request Body                                      | Description          |
 |--------|----------|----------------------------------------------------|----------------------|
-| POST   | `/auth`  | `{ "username": "학번", "password": "비밀번호" }`   | 사용자 로그인 인증  |
+| POST   | `/login` | `{ "username": "학번", "password": "비밀번호" }`   | 포털 로그인 및 학사 세션 검증 |
+| POST   | `/auth`  | `{ "username": "학번", "password": "비밀번호" }`   | legacy 로그인 검증 alias |
 | POST   | `/scrape`| `{ "username": "학번", "password": "비밀번호" }`   | 데이터 크롤링 및 병합 |
 | GET    | `/health`| 없음                                               | 서버 상태 확인      |
 

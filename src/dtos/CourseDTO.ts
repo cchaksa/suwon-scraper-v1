@@ -8,7 +8,7 @@ export interface CourseDTO {
   refacYearSmr: string; // Retake semester info
   closeYn: boolean; // Closed/finished status
   facDvcd: number; // Faculty division code
-  point: number; // Credits for the course
+  point: number | null; // Credits for the course
   ltrPrfsNm: string; // Professor name
   subjtEstbYearSmr: string; // Subject establishment semester (e.g., "2024-2학기")
   subjtEstbSmrCd: string; // Semester code (e.g., "10", "20", "15", "25")

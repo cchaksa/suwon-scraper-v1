@@ -40,7 +40,11 @@ export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO
       }
     } else {
       // 수강 데이터가 없는 경우, 성적 데이터만 추가한다.
-      semesterMap[semesterKey].courses[credit.subjtCd] = { ...credit };
+      const merged: MergedSemesterCourseDTO = { ...credit };
+      if (credit.gainPoint != null) {
+        merged.point = credit.gainPoint;
+      }
+      semesterMap[semesterKey].courses[credit.subjtCd] = merged;
     }
   }
 

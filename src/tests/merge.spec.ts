@@ -87,3 +87,47 @@ test("수강 데이터의 non-null point는 중복 성적보다 우선한다", (
 
   assert.equal(semester.courses[0].point, 4);
 });
+
+test("수강 데이터의 point가 null이면 최신 gainPoint를 point로 사용한다", () => {
+  const course = {
+    subjtCd: "04048",
+    subjtEstbYear: 2025,
+    subjtEstbSmrCd: "10",
+    point: null,
+  } as unknown as CourseDTO;
+  const credits = [createCredit({ gainPoint: 2 }), createCredit({ gainPoint: 3 })];
+
+  const [semester] = mergeCreditCourse(credits, [course]);
+
+  assert.equal(semester.courses[0].point, 3);
+});
+
+test("성적 단독 데이터의 최신 gainPoint가 null이면 이전 point를 제거한다", () => {
+  const credits = [createCredit({ gainPoint: 2 }), { ...createCredit(), gainPoint: null } as unknown as CreditDTO];
+
+  const [semester] = mergeCreditCourse(credits, []);
+
+  assert.equal(Object.prototype.hasOwnProperty.call(semester.courses[0], "point"), false);
+});
+
+test("성적 단독 데이터의 최신 gainPoint가 undefined이면 이전 point를 제거한다", () => {
+  const credits = [createCredit({ gainPoint: 2 }), createCredit({ gainPoint: undefined })];
+
+  const [semester] = mergeCreditCourse(credits, []);
+
+  assert.equal(Object.prototype.hasOwnProperty.call(semester.courses[0], "point"), false);
+});
+
+test("수강 데이터의 원래 point가 null이고 최신 gainPoint가 null이면 null을 보존한다", () => {
+  const course = {
+    subjtCd: "04048",
+    subjtEstbYear: 2025,
+    subjtEstbSmrCd: "10",
+    point: null,
+  } as unknown as CourseDTO;
+  const credits = [createCredit({ gainPoint: 2 }), { ...createCredit(), gainPoint: null } as unknown as CreditDTO];
+
+  const [semester] = mergeCreditCourse(credits, [course]);
+
+  assert.equal(semester.courses[0].point, null);
+});

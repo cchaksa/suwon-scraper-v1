@@ -37,3 +37,14 @@
 - [x] 대상 병합 테스트 통과 확인
 - [x] `corepack yarn test` 전체 통과 확인
 - [x] 생성된 `dist/*` 변경 원복 및 변경 범위 재검토
+
+## 중복 성적 학점 출처 보존 체크리스트
+
+- [x] 원래 수강 `point=null`의 최신 `gainPoint` 회귀 테스트 추가
+- [x] 성적 단독 최신 `gainPoint=null`·`undefined` 회귀 테스트 추가
+- [x] 원래 수강 `point=null` 복원 회귀 테스트 추가
+- [x] 새 테스트의 RED 상태 확인
+- [x] 과목 키별 원래 수강 `point` 출처 보존 구현
+- [x] 대상 병합 테스트 통과 확인
+- [x] `corepack yarn test` 전체 통과 확인
+- [x] 생성된 `dist/*` 변경 원복 및 변경 범위 재검토

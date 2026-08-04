@@ -50,3 +50,6 @@
 - 중복 성적의 최신 `gainPoint`, 외부 응답의 명시적 `gainPoint=null`, 실제 수강 데이터의 non-null `point` 우선순위 회귀 테스트를 추가했다. `null` 케이스는 `CreditDTO`가 허용하지 않는 외부 응답 경계를 좁은 `unknown as CreditDTO` 캐스트로 표현했다.
 - 기존 객체가 실제 수강 데이터이고 `point`가 non-null이면 값을 보존하고, 그 외에는 각 성적 데이터의 non-null `gainPoint`로 `point`를 갱신하도록 병합 분기를 보정했다.
 - RED에서 중복 성적 테스트는 최종 `gainPoint=3`에 대해 `point=2`로 남아 `2 !== 3`으로 실패했다. GREEN 후 `corepack yarn build && node --test dist/tests/merge.spec.js`의 7개와 `corepack yarn test`의 전체 40개가 통과했다.
+- 재검토에서 합성된 `point`가 원래 수강 데이터의 non-null `point`로 오인되는 문제가 확인됐다. 이 때문에 원래 `point=null`인 수강 과목의 `gainPoint=2→3` 갱신과 성적 단독의 최신 nullish 처리도 잘못됐다.
+- 수강 데이터를 그룹화할 때 학기·과목 키별 원래 `CourseDTO.point`를 `originalCoursePoints`에 별도로 저장했다. 성적을 병합할 때 원래 non-null 값은 보존하고, 원래 null은 최신 `gainPoint` 또는 null로 복원하며, 성적 단독의 최신 nullish 값은 합성 `point`를 삭제한다.
+- 원래 수강 `point=null`의 최신 값 갱신, 성적 단독의 최신 `null`·`undefined` 삭제, 원래 수강 null 복원 테스트를 먼저 추가했다. RED에서 각각 `2 !== 3`, own `point` 필드 잔존, `2 !== null`로 실패했고, GREEN 후 대상 11개 및 전체 44개 테스트가 통과했다.

@@ -34,8 +34,11 @@ export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO
     const existing = semesterMap[semesterKey].courses[credit.subjtCd];
     if (existing) {
       // 동일 과목이 이미 존재하면, 기존 수강 데이터에 성적 데이터를 병합한다.
+      const coursePoint = existing.subjtEstbYear != null && existing.point != null ? existing.point : undefined;
       Object.assign(existing, credit);
-      if (existing.point == null && credit.gainPoint != null) {
+      if (coursePoint !== undefined) {
+        existing.point = coursePoint;
+      } else if (credit.gainPoint != null) {
         existing.point = credit.gainPoint;
       }
     } else {

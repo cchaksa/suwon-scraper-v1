@@ -46,3 +46,7 @@
 - 첫 RED 빌드는 TypeScript 대상 라이브러리에 `Object.hasOwn`이 없어 컴파일 오류가 났다. 같은 검증을 `Object.prototype.hasOwnProperty.call`로 변경한 뒤, 성적 단독 `gainPoint=3`과 `0`이 각각 `undefined`로 실패하는 RED를 확인했다.
 - `src/services/merge.ts`의 성적 단독 분기에서만 `gainPoint != null`일 때 `point`를 설정했다. 따라서 `0`은 보존되고 `null`·`undefined`는 새 `point` 필드를 만들지 않는다.
 - `corepack yarn build && node --test dist/tests/merge.spec.js`에서 병합 테스트 4개가 통과했고, `corepack yarn test`에서 전체 37개가 통과했다.
+- 리뷰에서 성적 단독 데이터가 같은 학기·과목으로 중복될 때 최신 `gainPoint`가 결과 `gainPoint`에만 반영되고 `point`는 첫 값으로 남는 문제가 확인됐다.
+- 중복 성적의 최신 `gainPoint`, 외부 응답의 명시적 `gainPoint=null`, 실제 수강 데이터의 non-null `point` 우선순위 회귀 테스트를 추가했다. `null` 케이스는 `CreditDTO`가 허용하지 않는 외부 응답 경계를 좁은 `unknown as CreditDTO` 캐스트로 표현했다.
+- 기존 객체가 실제 수강 데이터이고 `point`가 non-null이면 값을 보존하고, 그 외에는 각 성적 데이터의 non-null `gainPoint`로 `point`를 갱신하도록 병합 분기를 보정했다.
+- RED에서 중복 성적 테스트는 최종 `gainPoint=3`에 대해 `point=2`로 남아 `2 !== 3`으로 실패했다. GREEN 후 `corepack yarn build && node --test dist/tests/merge.spec.js`의 7개와 `corepack yarn test`의 전체 40개가 통과했다.

@@ -118,6 +118,15 @@ test("성적 단독 데이터의 최신 gainPoint가 undefined이면 이전 poin
   assert.equal(Object.prototype.hasOwnProperty.call(semester.courses[0], "point"), false);
 });
 
+test("성적 단독 데이터의 최신 입력에 gainPoint 키가 없으면 이전 gainPoint와 point를 제거한다", () => {
+  const credits = [createCredit({ gainPoint: 2 }), createCredit()];
+
+  const [semester] = mergeCreditCourse(credits, []);
+
+  assert.equal(Object.prototype.hasOwnProperty.call(semester.courses[0], "gainPoint"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(semester.courses[0], "point"), false);
+});
+
 test("수강 데이터의 원래 point가 null이고 최신 gainPoint가 null이면 null을 보존한다", () => {
   const course = {
     subjtCd: "04048",

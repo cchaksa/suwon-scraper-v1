@@ -56,3 +56,7 @@
 - 2026-08-06에 `feat/19` Docker 이미지를 Linux 컨테이너로 빌드하고 `/health` 200 응답을 확인했다.
 - 편입생 실계정에서 `enscDvcd=2`와 편입인정 과목 4건을 확인했다. 각 과목의 인정 학점은 20, 15, 18, 12였고 모두 `point == gainPoint`로 병합됐다.
 - 일반 학생 실계정에서도 스크래핑 응답 구조, 일반 과목 수집, `gainPoint`가 있는 과목의 `point` 존재 여부를 점검했고 회귀 검사 스크립트가 통과했다.
+- 2026-08-06 리뷰에서 최신 중복 성적에 `gainPoint` 키 자체가 없으면 `Object.assign`이 이전 성적의 `gainPoint`를 제거하지 못하는 경우가 확인됐다. 최신 성적 객체를 기준으로 `point`뿐 아니라 `gainPoint`의 존재 여부도 일치시켜야 하며, JSON에서 필드 누락과 명시적 `undefined`는 테스트 입력 구성상 서로 다른 경우로 검증한다.
+- `gainPoint=2`인 성적 뒤에 `gainPoint` 키가 없는 동일 과목 성적을 병합하는 회귀 테스트를 추가했다. 수정 전에는 최종 결과에 이전 `gainPoint` 키가 남아 `true !== false`로 실패했다.
+- 중복 병합 직전에 최신 성적의 `gainPoint` own property 여부를 확인하고, 키가 없으면 `Object.assign` 이후 기존 `gainPoint`를 삭제하도록 보정했다. `point`는 기존 nullish 분기에서 함께 제거되므로 최신 성적의 필드 상태와 일치한다.
+- `corepack yarn build` 후 대상 병합 테스트 12개와 `corepack yarn test` 전체 45개가 통과했다. 테스트 빌드가 생성한 `dist/*` 변경은 원복했다.

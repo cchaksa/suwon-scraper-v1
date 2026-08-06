@@ -41,7 +41,11 @@ export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO
       // 동일 과목이 이미 존재하면, 기존 수강 데이터에 성적 데이터를 병합한다.
       const hasOriginalCourse = Object.prototype.hasOwnProperty.call(originalCoursePoints[semesterKey] ?? {}, credit.subjtCd);
       const originalCoursePoint = originalCoursePoints[semesterKey]?.[credit.subjtCd];
+      const hasGainPoint = Object.prototype.hasOwnProperty.call(credit, "gainPoint");
       Object.assign(existing, credit);
+      if (!hasGainPoint) {
+        delete existing.gainPoint;
+      }
       if (hasOriginalCourse && originalCoursePoint != null) {
         existing.point = originalCoursePoint;
       } else if (credit.gainPoint != null) {

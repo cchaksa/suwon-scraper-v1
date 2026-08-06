@@ -48,3 +48,6 @@
 - [x] 대상 병합 테스트 통과 확인
 - [x] `corepack yarn test` 전체 통과 확인
 - [x] 생성된 `dist/*` 변경 원복 및 변경 범위 재검토
+- [x] Linux Docker 이미지 빌드 및 `/health` 응답 확인
+- [x] 편입생 실계정에서 편입인정학점 `point == gainPoint` 확인
+- [x] 일반 학생 실계정에서 스크래핑 및 학점 병합 회귀 확인

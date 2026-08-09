@@ -35,6 +35,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
   let deleted = 0;
   let received = 0;
   const storedDescriptors: StoredResultDescriptor[] = [];
+  const storedPayloads: unknown[] = [];
 
   const deps: WorkerRuntimeDeps = {
     now: () => new Date("2026-03-03T12:00:00.000Z"),
@@ -51,6 +52,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
         listSmrCretSumTabYearSmr: [],
         selectSmrCretSumTabSjTotal: { gainPoint: "0", applPoint: "0", gainAvmk: "0", gainTavgPont: "0" },
       },
+      designatedCourses: [],
     }),
     sqsInputClient: {
       receiveOne: async () => {
@@ -73,6 +75,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
     },
     resultStorage: {
       put: async params => {
+        storedPayloads.push(params.payload);
         const descriptor: StoredResultDescriptor = {
           bucket: "mock-result-bucket",
           key: `scrape-results/${params.jobId}/mock-key.json`,
@@ -96,12 +99,13 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
     getDeleteCount: () => deleted,
     getReceiveCount: () => received,
     getStoredDescriptors: () => storedDescriptors,
+    getStoredPayloads: () => storedPayloads,
   };
 }
 
 test("정상 처리 시 succeeded 콜백 1회", async () => {
   const config = createConfig();
-  const { deps, callbackPayloads, getStoredDescriptors } = createDeps();
+  const { deps, callbackPayloads, getStoredDescriptors, getStoredPayloads } = createDeps();
   const raw = JSON.stringify({
     job_id: "job-1",
     user_id: "user-1",
@@ -114,6 +118,7 @@ test("정상 처리 시 succeeded 콜백 1회", async () => {
   assert.equal(exitCode, 0);
   assert.equal(callbackPayloads.length, 1);
   assert.equal(getStoredDescriptors().length, 1);
+  assert.deepEqual((getStoredPayloads()[0] as { designatedCourses: unknown[] }).designatedCourses, []);
   assert.equal(callbackPayloads[0].status, "succeeded");
   if (callbackPayloads[0].status === "succeeded") {
     assert.equal(callbackPayloads[0].result_s3_key, "scrape-results/job-1/mock-key.json");
@@ -205,6 +210,32 @@ test("포털 일시 실패는 retryable=true 콜백", async () => {
   assert.equal(callbackPayloads.length, 1);
   if (callbackPayloads[0].status === "failed") {
     assert.equal(callbackPayloads[0].error_code, "PORTAL_TIMEOUT");
+    assert.equal(callbackPayloads[0].retryable, true);
+  } else {
+    assert.fail("failed payload expected");
+  }
+});
+
+test("포털 일시 불가 오류는 retryable=true 콜백", async () => {
+  const config = createConfig();
+  const { deps, callbackPayloads } = createDeps({
+    scrapeFn: async () => {
+      throw new ScrapeJobError("PORTAL_TEMPORARY_UNAVAILABLE", "designated course API 503", true);
+    },
+  });
+  const raw = JSON.stringify({
+    job_id: "job-temporary-unavailable",
+    user_id: "user-temporary-unavailable",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  const exitCode = await runWorkerMessage(raw, config, deps);
+  assert.equal(exitCode, 1);
+  assert.equal(callbackPayloads.length, 1);
+  if (callbackPayloads[0].status === "failed") {
+    assert.equal(callbackPayloads[0].error_code, "PORTAL_TEMPORARY_UNAVAILABLE");
     assert.equal(callbackPayloads[0].retryable, true);
   } else {
     assert.fail("failed payload expected");

@@ -80,4 +80,4 @@
 
 - `yarn`이 설치되지 않아 `yarn build`와 `yarn test`는 실행하지 못했다.
 - `npx tsc --outDir <임시 경로>`: 성공.
-- `NODE_PATH="$PWD/node_modules" node --test <임시 경로>/tests/*.js`: 42개 통과, 0개 실패.
+- `NODE_PATH="$PWD/node_modules" node --test <임시 경로>/tests/*.js`: 53개 통과, 0개 실패.

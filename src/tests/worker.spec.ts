@@ -51,6 +51,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
         listSmrCretSumTabYearSmr: [],
         selectSmrCretSumTabSjTotal: { gainPoint: "0", applPoint: "0", gainAvmk: "0", gainTavgPont: "0" },
       },
+      designatedCourses: [],
     }),
     sqsInputClient: {
       receiveOne: async () => {

@@ -1,6 +1,7 @@
 // 편입생 지정과목 API를 호출해 선이수 과목 배열을 반환하는 크롤러
 import type { Page } from "playwright-core";
 import type { DesignatedCourseDTO } from "../dtos/DesignatedCourseDTO";
+import { ScrapeJobError } from "../services/scrapeErrors";
 import { logger } from "../utils/logger";
 
 const DESIGNATED_COURSE_HEADERS = {
@@ -20,6 +21,13 @@ export async function scrapeDesignatedCourses(page: Page, username: string): Pro
   logger.info(`Designated course response status:${username}`, response.status());
   if (!response.ok()) {
     logger.error(`Failed to fetch designated courses:${username}`, response.status());
+    if (response.status() >= 500 && response.status() < 600) {
+      throw new ScrapeJobError(
+        "PORTAL_TEMPORARY_UNAVAILABLE",
+        `Failed to fetch designated courses: ${response.status()}`,
+        true
+      );
+    }
     throw new Error(`Failed to fetch designated courses: ${response.status()}`);
   }
 

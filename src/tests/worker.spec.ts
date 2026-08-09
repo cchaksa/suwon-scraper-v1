@@ -216,6 +216,32 @@ test("포털 일시 실패는 retryable=true 콜백", async () => {
   }
 });
 
+test("포털 일시 불가 오류는 retryable=true 콜백", async () => {
+  const config = createConfig();
+  const { deps, callbackPayloads } = createDeps({
+    scrapeFn: async () => {
+      throw new ScrapeJobError("PORTAL_TEMPORARY_UNAVAILABLE", "designated course API 503", true);
+    },
+  });
+  const raw = JSON.stringify({
+    job_id: "job-temporary-unavailable",
+    user_id: "user-temporary-unavailable",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  const exitCode = await runWorkerMessage(raw, config, deps);
+  assert.equal(exitCode, 1);
+  assert.equal(callbackPayloads.length, 1);
+  if (callbackPayloads[0].status === "failed") {
+    assert.equal(callbackPayloads[0].error_code, "PORTAL_TEMPORARY_UNAVAILABLE");
+    assert.equal(callbackPayloads[0].retryable, true);
+  } else {
+    assert.fail("failed payload expected");
+  }
+});
+
 test("포털 영구 실패는 retryable=false 콜백", async () => {
   const config = createConfig();
   const { deps, callbackPayloads } = createDeps({

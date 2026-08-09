@@ -4,6 +4,7 @@ import test from "node:test";
 import type { Page } from "playwright-core";
 import type { DesignatedCourseDTO } from "../dtos/DesignatedCourseDTO";
 import { scrapeDesignatedCourses } from "../crawlers/designatedCourseCrawler";
+import { ScrapeJobError } from "../services/scrapeErrors";
 
 const designatedCourse: DesignatedCourseDTO = {
   orgClsCd: "ORG",
@@ -53,8 +54,24 @@ test("빈 배열, null, 응답 키 누락을 빈 배열로 정규화한다", asy
   }
 });
 
-test("지정과목 API가 실패하면 상태 코드를 포함한 오류를 던진다", async () => {
+test("지정과목 API 5xx 응답은 재시도 가능한 일시 오류를 던진다", async () => {
   const { page } = createPage({}, { ok: false, status: 503 });
 
-  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), /Failed to fetch designated courses: 503/);
+  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+    assert.ok(error instanceof ScrapeJobError);
+    assert.equal(error.errorCode, "PORTAL_TEMPORARY_UNAVAILABLE");
+    assert.equal(error.retryable, true);
+    assert.match(error.message, /Failed to fetch designated courses: 503/);
+    return true;
+  });
+});
+
+test("지정과목 API 4xx 응답은 기존 상태 코드 오류를 유지한다", async () => {
+  const { page } = createPage({}, { ok: false, status: 400 });
+
+  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+    assert.ok(!(error instanceof ScrapeJobError));
+    assert.match(error instanceof Error ? error.message : String(error), /Failed to fetch designated courses: 400/);
+    return true;
+  });
 });

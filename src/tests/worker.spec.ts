@@ -35,6 +35,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
   let deleted = 0;
   let received = 0;
   const storedDescriptors: StoredResultDescriptor[] = [];
+  const storedPayloads: unknown[] = [];
 
   const deps: WorkerRuntimeDeps = {
     now: () => new Date("2026-03-03T12:00:00.000Z"),
@@ -74,6 +75,7 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
     },
     resultStorage: {
       put: async params => {
+        storedPayloads.push(params.payload);
         const descriptor: StoredResultDescriptor = {
           bucket: "mock-result-bucket",
           key: `scrape-results/${params.jobId}/mock-key.json`,
@@ -97,12 +99,13 @@ function createDeps(overrides: Partial<WorkerRuntimeDeps> = {}) {
     getDeleteCount: () => deleted,
     getReceiveCount: () => received,
     getStoredDescriptors: () => storedDescriptors,
+    getStoredPayloads: () => storedPayloads,
   };
 }
 
 test("정상 처리 시 succeeded 콜백 1회", async () => {
   const config = createConfig();
-  const { deps, callbackPayloads, getStoredDescriptors } = createDeps();
+  const { deps, callbackPayloads, getStoredDescriptors, getStoredPayloads } = createDeps();
   const raw = JSON.stringify({
     job_id: "job-1",
     user_id: "user-1",
@@ -115,6 +118,7 @@ test("정상 처리 시 succeeded 콜백 1회", async () => {
   assert.equal(exitCode, 0);
   assert.equal(callbackPayloads.length, 1);
   assert.equal(getStoredDescriptors().length, 1);
+  assert.deepEqual((getStoredPayloads()[0] as { designatedCourses: unknown[] }).designatedCourses, []);
   assert.equal(callbackPayloads[0].status, "succeeded");
   if (callbackPayloads[0].status === "succeeded") {
     assert.equal(callbackPayloads[0].result_s3_key, "scrape-results/job-1/mock-key.json");

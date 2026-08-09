@@ -23,5 +23,5 @@
 - [x] `DesignatedCourseDTO`와 지정과목 크롤러를 구현한다.
 - [x] 편입생에게만 지정과목 API를 호출하도록 `scrapeJob`을 조정한다.
 - [x] S3 결과 계약과 `AGENTS.md`를 동기화한다.
-- [x] `yarn build`와 `yarn test`를 실행한다.
+- [x] `yarn` 미설치 환경에서 임시 경로 TypeScript 컴파일과 전체 `node:test` 대체 검증을 실행한다.
 - [x] 변경 파일과 영향 범위를 재검토한다.

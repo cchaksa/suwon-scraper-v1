@@ -78,5 +78,6 @@
 
 ## 검증 결과
 
-- `yarn build`: 성공.
-- `yarn test`: 성공.
+- `yarn`이 설치되지 않아 `yarn build`와 `yarn test`는 실행하지 못했다.
+- `npx tsc --outDir <임시 경로>`: 성공.
+- `NODE_PATH="$PWD/node_modules" node --test <임시 경로>/tests/*.js`: 40개 통과, 0개 실패.

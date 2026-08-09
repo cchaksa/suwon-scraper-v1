@@ -14,6 +14,7 @@ import { logger } from "../utils/logger";
 export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO[]): MergedSemesterDTO[] {
   // 학기별로 병합 결과를 저장할 맵 (키: "년도-학기코드")
   const semesterMap: Record<string, { semester: string; courses: Record<string, MergedSemesterCourseDTO> }> = {};
+  const originalCoursePoints: Record<string, Record<string, number | null>> = {};
 
   // 1. 수강 내역(CourseDTO)을 학기별로 그룹화
   for (const course of courseDTOs) {
@@ -21,8 +22,12 @@ export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO
     if (!semesterMap[semesterKey]) {
       semesterMap[semesterKey] = { semester: semesterKey, courses: {} };
     }
+    if (!originalCoursePoints[semesterKey]) {
+      originalCoursePoints[semesterKey] = {};
+    }
     // 과목 코드(subjtCd)를 기준으로 초기 값을 저장
     semesterMap[semesterKey].courses[course.subjtCd] = { ...course };
+    originalCoursePoints[semesterKey][course.subjtCd] = course.point;
   }
 
   // 2. 성적 데이터(CreditDTO)를 학기별로 병합
@@ -34,13 +39,29 @@ export function mergeCreditCourse(creditDTOs: CreditDTO[], courseDTOs: CourseDTO
     const existing = semesterMap[semesterKey].courses[credit.subjtCd];
     if (existing) {
       // 동일 과목이 이미 존재하면, 기존 수강 데이터에 성적 데이터를 병합한다.
+      const hasOriginalCourse = Object.prototype.hasOwnProperty.call(originalCoursePoints[semesterKey] ?? {}, credit.subjtCd);
+      const originalCoursePoint = originalCoursePoints[semesterKey]?.[credit.subjtCd];
+      const hasGainPoint = Object.prototype.hasOwnProperty.call(credit, "gainPoint");
       Object.assign(existing, credit);
-      if (existing.point == null && credit.gainPoint != null) {
+      if (!hasGainPoint) {
+        delete existing.gainPoint;
+      }
+      if (hasOriginalCourse && originalCoursePoint != null) {
+        existing.point = originalCoursePoint;
+      } else if (credit.gainPoint != null) {
         existing.point = credit.gainPoint;
+      } else if (hasOriginalCourse) {
+        existing.point = null;
+      } else {
+        delete existing.point;
       }
     } else {
       // 수강 데이터가 없는 경우, 성적 데이터만 추가한다.
-      semesterMap[semesterKey].courses[credit.subjtCd] = { ...credit };
+      const merged: MergedSemesterCourseDTO = { ...credit };
+      if (credit.gainPoint != null) {
+        merged.point = credit.gainPoint;
+      }
+      semesterMap[semesterKey].courses[credit.subjtCd] = merged;
     }
   }
 

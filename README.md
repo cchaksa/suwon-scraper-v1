@@ -1,6 +1,6 @@
 # Suwon Scraper
 
-suwon-scraper는 수원대학교 포털 및 학사 시스템 데이터를 크롤링하여 학생의 기본정보, 수강 내역, 성적 정보를 수집하고 가공하는 Node.js 기반의 웹 크롤러입니다. AWS ECS에서 Docker를 이용해 컨테이너로 배포하여 실행할 수 있습니다.
+suwon-scraper는 수원대학교 포털 및 학사 시스템 데이터를 크롤링하여 학생의 기본정보, 수강 내역, 성적 정보, 편입생 지정과목을 수집하고 가공하는 Node.js 기반의 웹 크롤러입니다. AWS ECS에서 Docker를 이용해 컨테이너로 배포하여 실행할 수 있습니다.
 
 suwon-scraper는 GitHub Actions를 활용하여 Amazon ECS에 배포됩니다. 배포는 자동 push 트리거가 아니라 GitHub Actions 수동 실행으로만 수행하며, 실행 화면에서 배포할 브랜치를 선택합니다.
 
@@ -9,6 +9,7 @@ suwon-scraper는 GitHub Actions를 활용하여 Amazon ECS에 배포됩니다. �
 - 학생 기본 정보 크롤링
 - 학기별 성적 및 학점 크롤링
 - 수강한 과목 세부 정보 크롤링
+- 편입생 지정과목 조건부 크롤링
 - ECS RunTask 1회 실행 비동기 워커
 - 결과 콜백 전송(`POST /internal/scrape-results`)
 
@@ -47,6 +48,14 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 백엔드는 해당 키를 이용해 원본 JSON을 재다운로드한다.
 - 실패 콜백은 기존과 동일하게 `error_code`, `error_message`, `retryable` 값을 전달한다.
 - S3 업로드에 실패하면 워커는 `RESULT_UPLOAD_FAILED` 오류로 콜백한다.
+
+### S3 스크래핑 원문 구조
+
+- `student`: 학생 기본 정보. `enscDvcd`가 `"2"`이면 편입생이다.
+- `semesters`: 학기별 수강·성적 병합 결과.
+- `academicRecords`: 학기별·누적 성적 요약.
+- `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
+- 지정과목 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 

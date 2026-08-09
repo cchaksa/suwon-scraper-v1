@@ -68,3 +68,15 @@
 - `enscDvcd` 코드 계약이 바뀌면 조건부 호출이 누락될 수 있으므로 코드 `"2"`를 테스트로 고정한다.
 - 지정과목 API 장애는 편입생 작업 전체를 실패시키므로 운영 장애 시 이 필드만 빈 배열로 처리할지 별도 정책 결정이 필요하다.
 - 롤백 시 DTO·크롤러·`ScrapeJobResult` 필드를 함께 제거하고 결과 계약 문서를 되돌린다.
+
+## 구현 결과
+
+- `DesignatedCourseDTO`와 `scrapeDesignatedCourses`를 추가했다.
+- `scrapeAuthenticatedData`가 편입생에게만 지정과목 API를 호출한다.
+- 모든 성공 결과와 S3 저장 payload가 `designatedCourses` 배열을 포함한다.
+- README와 `AGENTS.md`를 최종 결과 계약에 맞게 동기화했다.
+
+## 검증 결과
+
+- `yarn build`: 성공.
+- `yarn test`: 성공.

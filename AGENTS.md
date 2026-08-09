@@ -14,7 +14,7 @@
 - 작업으로 인해 본 문서의 내용이 달라졌다면 같은 작업에서 `AGENTS.md`도 갱신한다.
 
 ## 2) 프로젝트 개요
-- 목적: 수원대학교 포털/학사 시스템에서 학생 정보, 수강 정보, 성적 정보를 크롤링해 API로 제공
+- 목적: 수원대학교 포털/학사 시스템에서 학생 정보, 수강 정보, 성적 정보, 편입생 지정과목을 크롤링해 API로 제공
 - 런타임: Node.js + TypeScript + Express + Playwright
 - 배포: Docker 이미지 빌드 후 Amazon ECS(Fargate) 배포
 - 배포: GitHub Actions 수동 실행에서 develop/prod workflow를 선택하고, 실행 화면에서 브랜치 선택
@@ -23,14 +23,15 @@
 ## 3) 현재 저장소 구조(핵심)
 - `src/worker.ts`: ECS RunTask 비동기 워커 엔트리포인트
 - `src/server.ts`: legacy Express 엔트리포인트(`/login`, `/auth`, `/scrape`, `/health`)
-- `src/crawlers/*`: 학생/수강/성적 크롤링 API 호출
+- `src/crawlers/*`: 학생/수강/성적/편입생 지정과목 크롤링 API 호출
 - `src/services/scrapeJob.ts`: 워커/legacy 서버 공용 스크래핑 코어 로직
 - `src/services/portalLogin.ts`: 포털 로그인 및 학사 시스템 세션 핸드오프 공용 로직
 - `src/services/callbackClient.ts`: 내부 콜백 API 전송(HMAC/재시도)
 - `src/services/payloadValidator.ts`: 워커 입력 스키마 검증
 - `src/services/merge.ts`: 성적(Credit) + 수강(Course) 학기별 병합
-- `src/tests/*`: 워커/콜백/에러 분류 테스트
+- `src/tests/*`: 워커/콜백/에러 분류/크롤러 계약 테스트
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
+- S3 성공 원문은 `student`, `semesters`, `academicRecords`, `designatedCourses`를 포함하며 비편입생의 `designatedCourses`는 빈 배열이다.
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
 - `.github/workflows/deploy-develop.yml`: develop-shadow ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신

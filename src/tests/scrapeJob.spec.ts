@@ -30,7 +30,7 @@ const gradeResponse = {
 function createDeps(enscDvcd: string) {
   let designatedCalls = 0;
   const deps: ScrapeDataDeps = {
-    scrapeStudent: async () => ({ sno: "24020044", enscDvcd } as StudentDTO),
+    scrapeStudent: async () => ({ sno: "24020044", enscDvcd, flangPassGb: "미통과" } as StudentDTO),
     scrapeCourses: async () => [],
     scrapeCredits: async () => ({ creditDTOs: [], gradeResponse }),
     scrapeDesignatedCourses: async () => {
@@ -50,6 +50,7 @@ test("편입생이면 지정과목을 한 번 조회해 결과에 포함한다",
   assert.equal(getDesignatedCalls(), 1);
   assert.deepEqual(result.designatedCourses, [designatedCourse]);
   assert.equal(result.student.enscDvcd, "2");
+  assert.equal(result.student.flangPassGb, "미통과");
 });
 
 test("비편입생이면 지정과목 API를 호출하지 않고 빈 배열을 반환한다", async () => {

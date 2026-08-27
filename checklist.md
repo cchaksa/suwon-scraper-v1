@@ -73,3 +73,18 @@
 - [x] `corepack yarn test` 전체 통과 확인
 - [x] 생성된 `dist/*` 변경 원복 및 변경 범위 재검토
 - [x] 구현 및 검증 결과를 컨텍스트 문서에 기록
+
+## 이슈 24 학생 정보 및 S3 결과 계약 체크리스트
+
+- [x] 이슈 범위와 현재 학생 정보 매핑 흐름 확인
+- [x] `flangPassGb` 누락 시 `undefined` 유지 결정 기록
+- [x] 학생 정보 크롤러 계약 테스트를 먼저 추가하고 RED 확인
+- [x] `enscDvcd`와 `flangPassGb` 원본 매핑 검증
+- [x] `flangPassGb` 누락 시 `undefined` 유지 검증
+- [x] 최종 `ScrapeJobResult.student` 필드 보존 검증
+- [x] README에 S3 원문 필드 의미와 누락 규칙 문서화
+- [x] `AGENTS.md`와 구현·문서 일치 여부 확인
+- [x] 대상 테스트와 전체 테스트 실행
+- [x] 빌드 및 변경 범위 재검토
+- [x] 검증 결과를 컨텍스트 문서에 기록
+- [x] 편입생 실계정 스모크 테스트와 결과 기록

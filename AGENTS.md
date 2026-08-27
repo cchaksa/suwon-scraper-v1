@@ -31,7 +31,7 @@
 - `src/services/merge.ts`: 성적(Credit) + 수강(Course) 학기별 병합
 - `src/tests/*`: 워커/콜백/에러 분류/크롤러 계약 테스트
 - `src/dtos/*`: 외부 응답 및 내부 병합 구조 타입 정의
-- S3 성공 원문은 `student`, `semesters`, `academicRecords`, `designatedCourses`를 포함하며 비편입생의 `designatedCourses`는 빈 배열이다.
+- S3 성공 원문은 `student`, `semesters`, `academicRecords`, `designatedCourses`를 포함하며 비편입생의 `designatedCourses`는 빈 배열이다. `student.flangPassGb`는 포털 원본값을 유지하고, 응답에서 누락되면 `undefined`이므로 저장 JSON에서 생략된다.
 - `src/utils/logger.ts`: 단순 콘솔 로거
 - `dist/*`: TypeScript 빌드 산출물
 - `.github/workflows/deploy-develop.yml`: develop-shadow ECR 푸시 + ECS task definition 등록 + EventBridge Pipe 갱신

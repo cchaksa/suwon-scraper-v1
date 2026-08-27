@@ -51,11 +51,15 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 
 ### S3 스크래핑 원문 구조
 
-- `student`: 학생 기본 정보. `enscDvcd`가 `"2"`이면 편입생이다.
+- `student`: 학생 기본 정보.
+  - `enscDvcd`: 포털의 입학 구분 코드 원본값이다. `"2"`이면 편입생이며 지정과목 API의 조건부 호출 기준으로 사용한다.
+  - `flangPassGb`: 포털의 외국어 인증 상태 원본 문자열이다. 스크래퍼는 값을 해석하거나 변환하지 않는다. 포털 응답에 필드가 없으면 `undefined`를 유지하며, S3에 저장되는 JSON에서는 해당 속성이 생략된다.
 - `semesters`: 학기별 수강·성적 병합 결과.
+  - `courses[].point`: 백엔드가 학점 계산에 사용할 최종 반영 학점이다. 수강 데이터의 non-null `point`를 우선하고, 해당 값이 없으며 성적 `gainPoint`가 있으면 `gainPoint`로 보정한다. 성적 데이터만 존재하는 과목에도 같은 보정을 적용한다.
+  - `courses[].gainPoint`: 포털 성적 데이터의 취득·인정 학점 원본값이며 `point` 보정의 근거다. 최신 성적 데이터에 이 필드가 없으면 이전 값을 잔존시키지 않는다.
 - `academicRecords`: 학기별·누적 성적 요약.
 - `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
-- 지정과목 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
+  - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 

@@ -66,3 +66,7 @@
 - 기존 프로덕션 매핑이 계약을 만족하므로 런타임 로직은 변경하지 않았다.
 - `README.md`와 `AGENTS.md`에 S3 원문 필드 의미와 `flangPassGb` 생략 규칙을 반영했다.
 - `corepack yarn test` 실행 결과 TypeScript 빌드와 전체 테스트 55개가 통과했다.
+- `feat/24` Docker 이미지의 legacy `/scrape`를 편입생 실계정으로 호출해 HTTP 성공 응답을 확인했다.
+- 실계정 결과에서 S3 원문의 최상위 구조와 `student.enscDvcd`, `student.flangPassGb` 원본값 보존을 확인했다.
+- `gainPoint`가 존재하는 과목의 `point` 보정 계약과 `designatedCourses` 배열 계약을 확인했다.
+- 테스트 계정에는 `flangPassGb`가 존재했으므로 필드 누락 시 `undefined` 계약은 단위 테스트로 검증했다.

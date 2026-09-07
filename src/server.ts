@@ -1,5 +1,4 @@
 import cors from "cors";
-import { timingSafeEqual } from "node:crypto";
 import express, { type Response } from "express";
 import { scrapeJob } from "./services/scrapeJob";
 import { ScrapeJobError } from "./services/scrapeErrors";
@@ -11,15 +10,6 @@ type ScrapeFn = typeof scrapeJob;
 export interface ServerDeps {
   loginFn?: PortalLoginFn;
   scrapeFn?: ScrapeFn;
-  internalAuthToken?: string;
-}
-
-function isAuthorizedInternalRequest(providedToken: string | undefined, expectedToken: string | undefined): boolean {
-  if (!expectedToken) return true;
-  if (!providedToken) return false;
-  const provided = Buffer.from(providedToken);
-  const expected = Buffer.from(expectedToken);
-  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 function parsePositiveNumber(raw: string | undefined, fallback: number): number {
@@ -45,17 +35,11 @@ export function createApp(deps: ServerDeps = {}) {
   const app = express();
   const loginFn = deps.loginFn ?? verifyPortalLogin;
   const scrapeFn = deps.scrapeFn ?? scrapeJob;
-  const internalAuthToken = deps.internalAuthToken ?? process.env.SCRAPER_INTERNAL_AUTH_TOKEN;
 
   app.use(cors());
   app.use(express.json());
 
   app.post("/login", async (req, res) => {
-    const providedToken = req.get("X-Scraper-Internal-Token");
-    if (!isAuthorizedInternalRequest(providedToken, internalAuthToken)) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
     const { username, password } = req.body ?? {};
     if (!username || !password) {
       return res.status(400).json({ error: "학번/비밀번호가 필요합니다." });

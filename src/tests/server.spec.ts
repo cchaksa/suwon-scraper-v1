@@ -25,9 +25,13 @@ function createMockResponse() {
   };
 }
 
-async function callHandler(handler: TestHandler, body: unknown): Promise<{ status: number; body: string }> {
+async function callHandler(
+  handler: TestHandler,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; body: string }> {
   const response = createMockResponse();
-  await handler({ body }, response);
+  await handler({ body, get: (name: string) => headers[name.toLowerCase()] }, response);
   return {
     status: response.statusCode,
     body: response.body,
@@ -60,6 +64,7 @@ test("POST /login 성공 시 204를 반환하고 스크래핑을 실행하지 �
   let loginCalls = 0;
   let scrapeCalls = 0;
   const app = createApp({
+    internalAuthToken: "internal-token",
     loginFn: async params => {
       loginCalls += 1;
       assert.equal(params.username, "17019013");
@@ -72,12 +77,32 @@ test("POST /login 성공 시 204를 반환하고 스크래핑을 실행하지 �
   });
   const handler = getRouteHandler(app, "/login", "post");
 
-  const response = await callHandler(handler, { username: "17019013", password: "pw" });
+  const response = await callHandler(
+    handler,
+    { username: "17019013", password: "pw" },
+    { "x-scraper-internal-token": "internal-token" },
+  );
 
   assert.equal(response.status, 204);
   assert.equal(response.body, "");
   assert.equal(loginCalls, 1);
   assert.equal(scrapeCalls, 0);
+});
+
+test("POST /login 내부 인증 token이 다르면 403을 반환한다", async () => {
+  let loginCalls = 0;
+  const app = createApp({
+    internalAuthToken: "internal-token",
+    loginFn: async () => {
+      loginCalls += 1;
+    },
+  });
+  const handler = getRouteHandler(app, "/login", "post");
+
+  const response = await callHandler(handler, { username: "17019013", password: "pw" });
+
+  assert.equal(response.status, 403);
+  assert.equal(loginCalls, 0);
 });
 
 test("POST /login 포털 인증 실패 시 401을 반환한다", async () => {

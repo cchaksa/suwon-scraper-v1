@@ -130,20 +130,6 @@ aws pipes update-pipe \
 
 aws pipes describe-pipe --name "$PIPE_NAME" > updated-pipe-description.json
 
-if [ -n "${LOGIN_SERVICE_NAME:-}" ]; then
-  : "${LOGIN_CLUSTER_NAME:?LOGIN_CLUSTER_NAME is required when LOGIN_SERVICE_NAME is set}"
-  : "${LOGIN_TASK_DEFINITION_FAMILY:?LOGIN_TASK_DEFINITION_FAMILY is required when LOGIN_SERVICE_NAME is set}"
-
-  aws ecs describe-task-definition --task-definition "$LOGIN_TASK_DEFINITION_FAMILY" --query taskDefinition --output json > login-task-definition.json
-  jq --arg image "$IMAGE_URI" '
-    del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy,.deregisteredAt)
-    | .containerDefinitions[0].image = $image
-  ' login-task-definition.json > rendered-login-task-definition.json
-  LOGIN_TASK_DEFINITION_ARN=$(aws ecs register-task-definition --cli-input-json file://rendered-login-task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
-  aws ecs update-service --cluster "$LOGIN_CLUSTER_NAME" --service "$LOGIN_SERVICE_NAME" --task-definition "$LOGIN_TASK_DEFINITION_ARN" --force-new-deployment >/dev/null
-  aws ecs wait services-stable --cluster "$LOGIN_CLUSTER_NAME" --services "$LOGIN_SERVICE_NAME"
-fi
-
 CURRENT_PIPE_BATCH_SIZE=$(jq -r '.SourceParameters.SqsQueueParameters.BatchSize' updated-pipe-description.json)
 CURRENT_PIPE_TASK_ARN=$(jq -r '.TargetParameters.EcsTaskParameters.TaskDefinitionArn' updated-pipe-description.json)
 CURRENT_PIPE_BODY_ENV=$(jq -r --arg container "$CONTAINER_NAME" '
@@ -209,10 +195,7 @@ echo "pipe_task_definition_arn=$CURRENT_PIPE_TASK_ARN" >> "$GITHUB_OUTPUT"
   echo "- TASK_DEFINITION_ARN: \`$TASK_DEFINITION_ARN\`"
   echo "- PIPE_NAME: \`$PIPE_NAME\`"
   echo "- PIPE_TASK_DEFINITION_ARN: \`$CURRENT_PIPE_TASK_ARN\`"
-  if [ -n "${LOGIN_SERVICE_NAME:-}" ]; then
-    echo "- LOGIN_SERVICE_NAME: \`$LOGIN_SERVICE_NAME\`"
-    echo "- LOGIN_TASK_DEFINITION_ARN: \`$LOGIN_TASK_DEFINITION_ARN\`"
-  fi
   echo "- Artifact: \`worker-deployment-output/deployment-output.json\`"
-  echo "- Required CI IAM: ecs:RegisterTaskDefinition, ecs:DescribeTaskDefinition, ecs:UpdateService, ecs:DescribeServices, pipes:DescribePipe, pipes:UpdatePipe, iam:PassRole"
+  echo "- Required CI IAM: ecs:RegisterTaskDefinition, ecs:DescribeTaskDefinition, pipes:DescribePipe, pipes:UpdatePipe, iam:PassRole"
 } >> "$GITHUB_STEP_SUMMARY"
+

@@ -10,9 +10,6 @@ env:
   ECR_REPOSITORY: develop-shadow-scraper-worker
   PIPE_NAME: develop-shadow-scraper-jobs-to-ecs
   TASK_DEFINITION_FILE: task-definition.json
-  LOGIN_CLUSTER_NAME: develop-shadow-scraper-cluster
-  LOGIN_SERVICE_NAME: develop-shadow-scraper-login
-  LOGIN_TASK_DEFINITION_FAMILY: develop-shadow-scraper-login
   SCRAPE_CALLBACK_HMAC_SECRET_ARN: arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy
 
 jobs:
@@ -56,3 +53,4 @@ jobs:
           image-uri.txt
           deployment-output.json
         retention-days: 7
+

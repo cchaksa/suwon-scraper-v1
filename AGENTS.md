@@ -65,8 +65,8 @@
 - 워커 배포 파이프라인은 자동 push 트리거를 사용하지 않고 수동 실행(`workflow_dispatch`)만 지원한다.
 - develop 배포는 `.github/workflows/deploy-develop.yml`, prod 배포는 `.github/workflows/deploy-prod.yml`에서 수행한다.
 - 배포할 코드는 GitHub Actions `Run workflow` 화면의 브랜치 선택으로 결정한다.
-- develop 배포 workflow는 워커와 동기 로그인 ECS Service를 동일 이미지 revision으로 갱신한다.
-- 배포 순서는 `ECR push -> worker task definition/Pipe update -> login task definition/Service update`로 유지한다.
+- 배포 workflow는 ECS 서비스 업데이트를 수행하지 않는다.
+- 배포 순서는 `ECR push -> ECS register-task-definition -> EventBridge Pipe update`로 유지한다.
 - `.github/scripts/deploy-worker.sh`는 두 workflow 공용 스크립트이므로 대상별 리소스 값은 각 workflow env에서 관리한다.
 - shadow 리소스 기준:
   - ECR repository: `develop-shadow-scraper-worker`
@@ -91,7 +91,7 @@
 - task definition의 `SCRAPE_CALLBACK_HMAC_SECRET`는 short name이 아니라 Secrets Manager ARN을 사용해야 한다.
 - 현재 기준 값은 `arn:aws:secretsmanager:ap-northeast-2:984762359128:secret:prod/scraper/SCRAPE_CALLBACK_HMAC_SECRET-gr43oy`다.
 - 콜백 HMAC 규약은 `HMAC-SHA256`, canonical string `${timestamp}.${rawBody}`, `X-Timestamp`, `X-Signature(hex)`로 고정한다.
-- develop CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `ecs:UpdateService`, `ecs:DescribeServices`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.
+- CI 실행 주체는 `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `pipes:DescribePipe`, `pipes:UpdatePipe`, `iam:PassRole` 권한이 필요하다.
 - Docker 베이스 이미지는 Playwright 포함 이미지(`mcr.microsoft.com/playwright:v1.41.2-focal`)를 사용한다.
 
 ## 7) 변경 후 double check 체크리스트

@@ -15,7 +15,7 @@ const DESIGNATED_COURSE_HEADERS = {
 export async function scrapeDesignatedCourses(page: Page, username: string): Promise<DesignatedCourseDTO[]> {
   const response = await page.request.post("https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do", {
     headers: DESIGNATED_COURSE_HEADERS,
-    data: { sno: username },
+    data: { sno: username, orgClsCd: "20" },
   });
 
   logger.info(`Designated course response status:${username}`, response.status());

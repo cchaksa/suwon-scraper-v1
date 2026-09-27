@@ -2,6 +2,8 @@
 
 > 이 문서는 #21 구현 당시의 기록이다. 응답 키 `listPrecpSbjt`와 누락·null을 빈 배열로 처리하는 아래 예시 코드는 #26에서 폐기했다. 현재 계약은 [`docs/designated-courses-context.md`](../../designated-courses-context.md)와 [갱신된 설계](../specs/2026-08-09-designated-courses-design.md)를 따른다. 실제 응답 키는 `precpSbjtList`이며 형식 오류는 전체 작업 실패로 처리한다.
 
+> #28에서 학번만 전송하는 아래 요청 예시도 정정했다. 현재 요청 본문은 `{ sno: username, orgClsCd: "20" }`이며, 조직분류코드를 누락하면 지정과목이 있어도 정상 형식의 빈 배열이 반환될 수 있다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 편입생에게 지정된 선이수 과목을 조건부로 크롤링하고 모든 S3 성공 결과에 `designatedCourses` 배열을 포함한다.

@@ -2,7 +2,7 @@
 
 > 이 문서는 #21 구현 당시의 기록이다. 응답 키 `listPrecpSbjt`와 누락·null을 빈 배열로 처리하는 아래 예시 코드는 #26에서 폐기했다. 현재 계약은 [`docs/designated-courses-context.md`](../../designated-courses-context.md)와 [갱신된 설계](../specs/2026-08-09-designated-courses-design.md)를 따른다. 실제 응답 키는 `precpSbjtList`이며 형식 오류는 전체 작업 실패로 처리한다.
 
-> #28에서 학번만 전송하는 아래 요청 예시도 정정했다. 현재 요청 본문은 `{ sno: username, orgClsCd: student.orgClsCd }`이며, `"20"` 고정값이나 `orgCd` 대체값을 사용하지 않는다. 편입생의 조직분류코드가 없으면 요청 전에 수집 오류로 처리한다. 실제 학생 정보의 원천 필드 경로는 배포 전 확인이 필요하다.
+> #28에서 학번만 전송하는 아래 요청 예시도 정정했다. 학부 전용 범위의 요청 본문은 `{ sno: username, orgClsCd: "20" }`이며, 이름 있는 상수로 학부 조회 조건을 명시한다. 학생 정보의 `orgClsCd`는 요구하지 않는다. 코드 의미의 근거와 현행 계약은 위 컨텍스트·설계 문서를 따른다.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

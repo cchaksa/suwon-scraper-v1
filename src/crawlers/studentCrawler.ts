@@ -30,7 +30,6 @@ export async function scrapeStudent(page: Page, username: string): Promise<Stude
   }
   return {
     sno: studentInfo.sno,
-    orgClsCd: typeof studentInfo.orgClsCd === "string" ? studentInfo.orgClsCd : undefined,
     studNm: studentInfo.studNm,
     univCd: studentInfo.univCd,
     univNm: studentInfo.univNm,

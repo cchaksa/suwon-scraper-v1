@@ -48,13 +48,12 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 백엔드는 해당 키를 이용해 원본 JSON을 재다운로드한다.
 - 실패 콜백은 기존과 동일하게 `error_code`, `error_message`, `retryable` 값을 전달한다.
 - S3 업로드에 실패하면 워커는 `RESULT_UPLOAD_FAILED` 오류로 콜백한다.
-- 지정과목 응답 형식이 잘못되거나 편입생의 조직분류코드가 없으면 `PORTAL_RESPONSE_SCHEMA_MISMATCH`, `retryable: false`로 실패 콜백을 전송하고 S3 결과를 저장하지 않는다. 실패 콜백의 전송 재시도 정책은 유지한다.
+- 지정과목 응답 형식이 잘못되면 `PORTAL_RESPONSE_SCHEMA_MISMATCH`, `retryable: false`로 실패 콜백을 전송하고 S3 결과를 저장하지 않는다. 실패 콜백의 전송 재시도 정책은 유지한다.
 
 ### S3 스크래핑 원문 구조
 
 - `student`: 학생 기본 정보.
   - `enscDvcd`: 포털의 입학 구분 코드 원본값이다. `"2"`이면 편입생이며 지정과목 API의 조건부 호출 기준으로 사용한다.
-  - `orgClsCd`: 학생 정보 응답의 `studentInfo.orgClsCd`가 문자열이면 원본을 보존한다. 지정과목 요청에 전달할 조직분류코드이며 `orgCd`나 학과 코드로 대체하지 않는다. 누락되거나 문자열이 아니면 `undefined`로 매핑하고, 편입생은 빈 문자열·공백만 있는 값도 수집 오류로 처리한다. 비편입생은 지정과목 조회를 생략하므로 이 값이 필수는 아니다.
   - `flangPassGb`: 포털의 외국어 인증 상태 원본 문자열이다. 스크래퍼는 값을 해석하거나 변환하지 않는다. 포털 응답에 필드가 없으면 `undefined`를 유지하며, S3에 저장되는 JSON에서는 해당 속성이 생략된다.
 - `semesters`: 학기별 수강·성적 병합 결과.
   - `courses[].point`: 백엔드가 학점 계산에 사용할 최종 반영 학점이다. 수강 데이터의 non-null `point`를 우선하고, 해당 값이 없으며 성적 `gainPoint`가 있으면 `gainPoint`로 보정한다. 성적 데이터만 존재하는 과목에도 같은 보정을 적용한다.
@@ -63,14 +62,11 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
   - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
   - `POST /precpSbjt/listPrecpSbjt.do` 응답의 `precpSbjtList` 배열을 사용하며 항목의 추가 필드도 보존한다.
-  - 요청 본문은 `{ sno: username, orgClsCd: student.orgClsCd }`이다. [포털 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)는 `"20"`을 학부, `"30"`을 대학원에 사용한다. 코드가 없을 때 `"20"`을 기본값으로 대입하지 않으며, 요청이나 빈 배열 성공 처리도 하지 않는다.
+  - 지정과목 수집은 학부 편입생 전용이며 요청 본문은 `{ sno: username, orgClsCd: "20" }`이다. `UNDERGRADUATE_ORG_CLASS_CODE` 상수로 학부 조회 조건을 명시한다. 학생 정보의 `orgClsCd` 필드는 요구하지 않는다.
+  - [포털 공식 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)의 `openSubjtPopUp`·`openSubjtGridPopUp`은 학부에 `"20"`, 대학원에 `"30"`을 사용한다. 대학원 지정과목 수집은 현재 지원 범위에 포함하지 않는다.
   - 편입생의 정상 빈 응답은 명시적인 `precpSbjtList: []`다. 키 누락·null·배열이 아닌 값·JSON 구문 오류는 빈 목록으로 대체하지 않고 전체 작업을 실패시킨다.
 
 지정과목 누락 수정 이전에 빈 목록이 저장된 계정은 수정 워커 배포 후 포털 재동기화가 필요하다. 배포만으로 기존 데이터가 복구되지는 않는다.
-
-실제 `/scrgBas/selectScrgBas.do` 응답이 `studentInfo.orgClsCd`를 제공하는지는 아직 확인되지 않았다. 배포 전 인증된 포털 응답에서 필드 경로를 확인해야 하며, 다른 경로라면 해당 경로에 맞게 매핑을 수정해야 한다.
-
-현재 코드는 비어 있지 않은 문자열이면 지정과목 요청에 그대로 전달한다. `"30"`이나 그 밖의 코드에 대한 지정과목 API 지원 여부는 검증되지 않았으며, 문자열 형식 검증만으로 실제 조회 조건의 유효성을 보장하지 않는다. 배포 전 지원할 조직분류 범위와 각 분류의 API 동작을 확인해야 한다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 

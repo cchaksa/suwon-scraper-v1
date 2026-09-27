@@ -54,17 +54,3 @@ test("외국어 인증 상태가 누락되면 undefined를 유지한다", async 
 
   assert.equal(result.flangPassGb, undefined);
 });
-
-test("학생 정보의 조직분류코드는 orgCd와 구분해 원본 그대로 매핑한다", async () => {
-  for (const orgClsCd of ["20", "TEST_OTHER_ORG"]) {
-    const result = await scrapeStudent(createPage(createStudentInfo({ orgClsCd, orgCd: "TEST_DEPARTMENT" })), "24020044");
-    assert.equal(result.orgClsCd, orgClsCd);
-  }
-});
-
-test("유효한 문자열 조직분류코드가 없으면 orgCd나 20으로 대체하지 않는다", async () => {
-  for (const orgClsCd of [undefined, null, 20, {}, []]) {
-    const result = await scrapeStudent(createPage(createStudentInfo({ orgClsCd, orgCd: "TEST_DEPARTMENT" })), "24020044");
-    assert.equal(result.orgClsCd, undefined);
-  }
-});

@@ -2,7 +2,6 @@ import { StudentStatus } from "../enums";
 
 export interface StudentDTO {
     sno: string; // 학번 (예: 17019013)
-    orgClsCd?: string; // 포털 학생 정보의 조직분류코드. 편입생 지정과목 조회 시 필수.
     studNm: string; // 학생 이름 (예: 김민규)
     univCd: string; // 대학 코드 (예: 2000510)
     univNm: string; // 대학 이름 (예: ICT융합대학)

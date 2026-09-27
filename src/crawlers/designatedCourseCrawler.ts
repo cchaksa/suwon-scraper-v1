@@ -4,6 +4,9 @@ import type { DesignatedCourseDTO } from "../dtos/DesignatedCourseDTO";
 import { ScrapeJobError } from "../services/scrapeErrors";
 import { logger } from "../utils/logger";
 
+// 학부 전용 조회 코드. 근거: https://info.suwon.ac.kr/js/sa/commSa.js의 openSubjtPopUp.
+const UNDERGRADUATE_ORG_CLASS_CODE = "20";
+
 const DESIGNATED_COURSE_HEADERS = {
   "Content-Type": "application/json;charset=UTF-8",
   Accept: "application/json",
@@ -12,22 +15,10 @@ const DESIGNATED_COURSE_HEADERS = {
     "https://info.suwon.ac.kr/websquare/websquare_mobile.html?w2xPath=/views/usw/sa/hj/SA_HJ_1230.xml&menuSeq=3818&progSeq=1117",
 };
 
-export async function scrapeDesignatedCourses(
-  page: Page,
-  username: string,
-  orgClsCd: string | undefined
-): Promise<DesignatedCourseDTO[]> {
-  if (typeof orgClsCd !== "string" || orgClsCd.trim() === "") {
-    throw new ScrapeJobError(
-      "PORTAL_RESPONSE_SCHEMA_MISMATCH",
-      "학생 정보의 orgClsCd가 없거나 유효한 문자열이 아닙니다.",
-      false
-    );
-  }
-
+export async function scrapeDesignatedCourses(page: Page, username: string): Promise<DesignatedCourseDTO[]> {
   const response = await page.request.post("https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do", {
     headers: DESIGNATED_COURSE_HEADERS,
-    data: { sno: username, orgClsCd },
+    data: { sno: username, orgClsCd: UNDERGRADUATE_ORG_CLASS_CODE },
   });
 
   logger.info(`Designated course response status:${username}`, response.status());

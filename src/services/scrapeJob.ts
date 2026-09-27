@@ -44,7 +44,7 @@ export async function scrapeAuthenticatedData(
 ): Promise<ScrapeJobResult> {
   const studentPromise = deps.scrapeStudent(page, username);
   const designatedCoursesPromise = studentPromise.then(student =>
-    student.enscDvcd === "2" ? deps.scrapeDesignatedCourses(page, username, student.orgClsCd) : []
+    student.enscDvcd === "2" ? deps.scrapeDesignatedCourses(page, username) : []
   );
 
   const [student, courses, creditResult, designatedCourses] = await Promise.all([

@@ -65,4 +65,4 @@ interface DesignatedCourseDTO {
 - 편입학 코드 `enscDvcd === "2"`는 기존 `StudentDTO` 계약을 따른다.
 - 2026-09-27 실제 포털 응답에서 확인한 배열 키는 `precpSbjtList`다. #26에서 기존 `listPrecpSbjt` 가정과 누락 정규화 정책을 정정했다.
 - 같은 로그인 세션에서 학번만 전송하면 0개, `orgClsCd: "20"`을 함께 전송하면 확인 대상 학생의 지정과목 3개가 반환됐다. #28에서 요청 조건을 보완하며, 정상 빈 배열 허용은 유지한다.
-- `"20"`이 모든 학과·학생의 공통값이라는 근거는 없다. 실제 학생 정보 응답의 `studentInfo.orgClsCd` 존재 여부는 아직 확인되지 않았으며, 배포 전 원천 필드 경로와 다른 학생의 코드 전달을 검증해야 한다.
+- [포털 공식 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)의 `openSubjtPopUp`과 `openSubjtGridPopUp`은 학부에 `"20"`, 대학원에 `"30"`을 설정한다. 이는 특정 학과 코드라는 가정을 뒷받침하지 않는다. 실제 학생 정보 응답의 `studentInfo.orgClsCd` 존재 여부, 지정과목 API의 `"30"` 및 기타 코드 지원 여부는 아직 확인되지 않았으며 배포 전 검증해야 한다.

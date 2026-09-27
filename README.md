@@ -63,12 +63,14 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
   - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
   - `POST /precpSbjt/listPrecpSbjt.do` 응답의 `precpSbjtList` 배열을 사용하며 항목의 추가 필드도 보존한다.
-  - 요청 본문은 `{ sno: username, orgClsCd: student.orgClsCd }`이다. `"20"`은 한 계정에서 확인한 값이며 공통 기본값으로 사용하지 않는다. 유효한 조직분류코드가 없으면 요청을 보내거나 빈 배열로 성공 처리하지 않는다.
+  - 요청 본문은 `{ sno: username, orgClsCd: student.orgClsCd }`이다. [포털 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)는 `"20"`을 학부, `"30"`을 대학원에 사용한다. 코드가 없을 때 `"20"`을 기본값으로 대입하지 않으며, 요청이나 빈 배열 성공 처리도 하지 않는다.
   - 편입생의 정상 빈 응답은 명시적인 `precpSbjtList: []`다. 키 누락·null·배열이 아닌 값·JSON 구문 오류는 빈 목록으로 대체하지 않고 전체 작업을 실패시킨다.
 
 지정과목 누락 수정 이전에 빈 목록이 저장된 계정은 수정 워커 배포 후 포털 재동기화가 필요하다. 배포만으로 기존 데이터가 복구되지는 않는다.
 
 실제 `/scrgBas/selectScrgBas.do` 응답이 `studentInfo.orgClsCd`를 제공하는지는 아직 확인되지 않았다. 배포 전 인증된 포털 응답에서 필드 경로를 확인해야 하며, 다른 경로라면 해당 경로에 맞게 매핑을 수정해야 한다.
+
+현재 코드는 비어 있지 않은 문자열이면 지정과목 요청에 그대로 전달한다. `"30"`이나 그 밖의 코드에 대한 지정과목 API 지원 여부는 검증되지 않았으며, 문자열 형식 검증만으로 실제 조회 조건의 유효성을 보장하지 않는다. 배포 전 지원할 조직분류 범위와 각 분류의 API 동작을 확인해야 한다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 

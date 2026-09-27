@@ -17,6 +17,15 @@ test("timeout 메시지는 retryable timeout으로 분류", () => {
   assert.equal(classified.retryable, true);
 });
 
+test("포털 응답 형식 오류는 코드와 재시도 불가 상태를 유지한다", () => {
+  const error = new ScrapeJobError("PORTAL_RESPONSE_SCHEMA_MISMATCH", "지정과목 응답 형식 오류", false);
+  assert.deepEqual(classifyWorkerError(error), {
+    error_code: "PORTAL_RESPONSE_SCHEMA_MISMATCH",
+    error_message: "지정과목 응답 형식 오류",
+    retryable: false,
+  });
+});
+
 test("알 수 없는 오류는 non-retryable로 분류", () => {
   const classified = classifyWorkerError(new Error("something unexpected"));
   assert.equal(classified.error_code, "UNKNOWN_NON_RETRYABLE");

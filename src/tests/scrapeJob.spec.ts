@@ -5,6 +5,7 @@ import type { Page } from "playwright-core";
 import type { DesignatedCourseDTO } from "../dtos/DesignatedCourseDTO";
 import type { StudentDTO } from "../dtos/StudentDTO";
 import { scrapeAuthenticatedData, type ScrapeDataDeps } from "../services/scrapeJob";
+import { ScrapeJobError } from "../services/scrapeErrors";
 
 const designatedCourse: DesignatedCourseDTO = {
   orgClsCd: "ORG",
@@ -60,6 +61,19 @@ test("비편입생이면 지정과목 API를 호출하지 않고 빈 배열을 �
 
   assert.equal(getDesignatedCalls(), 0);
   assert.deepEqual(result.designatedCourses, []);
+});
+
+test("지정과목 형식 오류는 다른 수집 결과로 대체하지 않고 전체 작업 실패로 전파한다", async () => {
+  const { deps } = createDeps("2");
+  const schemaError = new ScrapeJobError("PORTAL_RESPONSE_SCHEMA_MISMATCH", "지정과목 응답 형식 오류", false);
+  deps.scrapeDesignatedCourses = async () => {
+    throw schemaError;
+  };
+
+  await assert.rejects(() => scrapeAuthenticatedData({} as Page, "24020044", deps), error => {
+    assert.equal(error, schemaError);
+    return true;
+  });
 });
 
 test("수강과 성적 요청은 학생 정보 완료를 기다리지 않고 시작한다", async () => {

@@ -31,6 +31,25 @@ export async function scrapeDesignatedCourses(page: Page, username: string): Pro
     throw new Error(`Failed to fetch designated courses: ${response.status()}`);
   }
 
-  const data = await response.json();
-  return Array.isArray(data?.listPrecpSbjt) ? data.listPrecpSbjt : [];
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new ScrapeJobError(
+      "PORTAL_RESPONSE_SCHEMA_MISMATCH",
+      "지정과목 응답을 JSON으로 해석할 수 없습니다.",
+      false
+    );
+  }
+
+  if (!data || typeof data !== "object" || !("precpSbjtList" in data) || !Array.isArray(data.precpSbjtList)) {
+    throw new ScrapeJobError(
+      "PORTAL_RESPONSE_SCHEMA_MISMATCH",
+      "지정과목 응답의 precpSbjtList가 배열이 아닙니다.",
+      false
+    );
+  }
+
+  return data.precpSbjtList;
 }

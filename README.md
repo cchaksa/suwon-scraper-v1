@@ -48,6 +48,7 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 백엔드는 해당 키를 이용해 원본 JSON을 재다운로드한다.
 - 실패 콜백은 기존과 동일하게 `error_code`, `error_message`, `retryable` 값을 전달한다.
 - S3 업로드에 실패하면 워커는 `RESULT_UPLOAD_FAILED` 오류로 콜백한다.
+- 지정과목 응답 형식이 잘못되면 `PORTAL_RESPONSE_SCHEMA_MISMATCH`, `retryable: false`로 실패 콜백을 전송하고 S3 결과를 저장하지 않는다. 실패 콜백의 전송 재시도 정책은 유지한다.
 
 ### S3 스크래핑 원문 구조
 
@@ -60,6 +61,10 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `academicRecords`: 학기별·누적 성적 요약.
 - `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
   - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
+  - `POST /precpSbjt/listPrecpSbjt.do` 응답의 `precpSbjtList` 배열을 사용하며 항목의 추가 필드도 보존한다.
+  - 편입생의 정상 빈 응답은 명시적인 `precpSbjtList: []`다. 키 누락·null·배열이 아닌 값·JSON 구문 오류는 빈 목록으로 대체하지 않고 전체 작업을 실패시킨다.
+
+지정과목 누락 수정 이전에 빈 목록이 저장된 계정은 수정 워커 배포 후 포털 재동기화가 필요하다. 배포만으로 기존 데이터가 복구되지는 않는다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 

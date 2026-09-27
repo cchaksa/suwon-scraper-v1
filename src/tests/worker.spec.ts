@@ -4,6 +4,37 @@ import { runWorker, runWorkerFromEnvironment, runWorkerMessage, type WorkerConfi
 import { ScrapeJobError } from "../services/scrapeErrors";
 import { ResultStorageError, type ResultStorageClient, type StoredResultDescriptor } from "../services/resultStorage";
 import type { WorkerCallbackPayload } from "../types/worker";
+import type { Page } from "playwright-core";
+import type { StudentDTO } from "../dtos/StudentDTO";
+import { scrapeDesignatedCourses } from "../crawlers/designatedCourseCrawler";
+import { scrapeAuthenticatedData } from "../services/scrapeJob";
+
+function createPortalScrapeFn(designatedResponse: unknown): WorkerRuntimeDeps["scrapeFn"] {
+  return async ({ username }) => {
+    const page = {
+      request: {
+        post: async () => ({
+          ok: () => true,
+          status: () => 200,
+          json: async () => designatedResponse,
+        }),
+      },
+    } as unknown as Page;
+
+    return scrapeAuthenticatedData(page, username, {
+      scrapeStudent: async () => ({ sno: username, enscDvcd: "2" } as StudentDTO),
+      scrapeCourses: async () => [],
+      scrapeCredits: async () => ({
+        creditDTOs: [],
+        gradeResponse: {
+          listSmrCretSumTabYearSmr: [],
+          selectSmrCretSumTabSjTotal: { gainPoint: "0", applPoint: "0", gainAvmk: "0", gainTavgPont: "0" },
+        },
+      }),
+      scrapeDesignatedCourses,
+    });
+  };
+}
 
 function createConfig(): WorkerConfig {
   return {
@@ -126,6 +157,61 @@ test("정상 처리 시 succeeded 콜백 1회", async () => {
     assert.equal(callbackPayloads[0].metadata.bucket, "mock-result-bucket");
     assert.equal(callbackPayloads[0].metadata.upload_attempt, 1);
   }
+});
+
+test("포털 precpSbjtList의 지정과목 3개가 S3 저장 payload까지 보존된다", async () => {
+  const designatedCourses = [1, 2, 3].map(index => ({
+    orgClsCd: "ORG",
+    subjtCd: `SUBJ00${index}`,
+    subjtNm: `지정과목 ${index}`,
+    point: 3,
+    precpResnCd: "01",
+    cretGainYear: "2026",
+    cretSmrNm: "1학기",
+    sno: "17019013",
+    extraPortalField: "추가 원본 필드",
+  }));
+  const { deps, callbackPayloads, getStoredPayloads } = createDeps({
+    scrapeFn: createPortalScrapeFn({ precpSbjtList: designatedCourses }),
+  });
+  const raw = JSON.stringify({
+    job_id: "job-designated-courses",
+    user_id: "user-1",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  assert.equal(await runWorkerMessage(raw, createConfig(), deps), 0);
+  assert.equal(getStoredPayloads().length, 1);
+  assert.deepEqual((getStoredPayloads()[0] as { designatedCourses: unknown[] }).designatedCourses, designatedCourses);
+  assert.equal(callbackPayloads.length, 1);
+  assert.equal(callbackPayloads[0].status, "succeeded");
+});
+
+test("지정과목 응답 키 오류는 S3 저장 없이 재시도 불가 실패 콜백으로 전달된다", async () => {
+  const { deps, callbackPayloads, getStoredDescriptors, getStoredPayloads } = createDeps({
+    scrapeFn: createPortalScrapeFn({ listPrecpSbjt: [] }),
+  });
+  const raw = JSON.stringify({
+    job_id: "job-designated-schema-mismatch",
+    user_id: "user-1",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  assert.equal(await runWorkerMessage(raw, createConfig(), deps), 1);
+  assert.equal(getStoredPayloads().length, 0);
+  assert.equal(getStoredDescriptors().length, 0);
+  assert.deepEqual(callbackPayloads, [{
+    job_id: "job-designated-schema-mismatch",
+    status: "failed",
+    error_code: "PORTAL_RESPONSE_SCHEMA_MISMATCH",
+    error_message: "지정과목 응답의 precpSbjtList가 배열이 아닙니다.",
+    retryable: false,
+    finished_at: "2026-03-03T12:00:00.000Z",
+  }]);
 });
 
 test("입력 스키마 오류(job_id 존재) 시 failed 콜백 전송", async () => {

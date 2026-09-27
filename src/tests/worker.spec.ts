@@ -5,7 +5,7 @@ import { ScrapeJobError } from "../services/scrapeErrors";
 import { ResultStorageError, type ResultStorageClient, type StoredResultDescriptor } from "../services/resultStorage";
 import type { WorkerCallbackPayload } from "../types/worker";
 import type { Page } from "playwright-core";
-import type { StudentDTO } from "../dtos/StudentDTO";
+import { scrapeStudent } from "../crawlers/studentCrawler";
 import { scrapeDesignatedCourses } from "../crawlers/designatedCourseCrawler";
 import { scrapeAuthenticatedData } from "../services/scrapeJob";
 
@@ -13,16 +13,27 @@ function createPortalScrapeFn(designatedResponse: unknown): WorkerRuntimeDeps["s
   return async ({ username }) => {
     const page = {
       request: {
-        post: async () => ({
-          ok: () => true,
-          status: () => 200,
-          json: async () => designatedResponse,
-        }),
+        post: async (url: string, options: { data: unknown }) => {
+          if (url === "https://info.suwon.ac.kr/scrgBas/selectScrgBas.do") {
+            return {
+              ok: () => true,
+              status: () => 200,
+              json: async () => ({ studentInfo: { sno: username, enscDvcd: "2" } }),
+            };
+          }
+          assert.equal(url, "https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do");
+          assert.deepEqual(options.data, { sno: username, orgClsCd: "20" });
+          return {
+            ok: () => true,
+            status: () => 200,
+            json: async () => designatedResponse,
+          };
+        },
       },
     } as unknown as Page;
 
     return scrapeAuthenticatedData(page, username, {
-      scrapeStudent: async () => ({ sno: username, enscDvcd: "2" } as StudentDTO),
+      scrapeStudent,
       scrapeCourses: async () => [],
       scrapeCredits: async () => ({
         creditDTOs: [],
@@ -212,6 +223,27 @@ test("지정과목 응답 키 오류는 S3 저장 없이 재시도 불가 실패
     retryable: false,
     finished_at: "2026-03-03T12:00:00.000Z",
   }]);
+});
+
+test("학생 정보에 orgClsCd가 없는 학부 편입생의 정상 빈 지정과목도 성공 저장한다", async () => {
+  const { deps, callbackPayloads, getStoredPayloads } = createDeps({
+    scrapeFn: createPortalScrapeFn({ precpSbjtList: [] }),
+  });
+  const raw = JSON.stringify({
+    job_id: "job-empty-designated-courses",
+    user_id: "user-1",
+    portal_type: "suwon",
+    request_payload: { username: "17019013", password: "pw" },
+    requested_at: "2026-03-03T10:00:00.000Z",
+  });
+
+  assert.equal(await runWorkerMessage(raw, createConfig(), deps), 0);
+  assert.equal(getStoredPayloads().length, 1);
+  const result = getStoredPayloads()[0] as { student: Record<string, unknown>; designatedCourses: unknown[] };
+  assert.deepEqual(result.designatedCourses, []);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.student, "orgClsCd"), false);
+  assert.equal(callbackPayloads.length, 1);
+  assert.equal(callbackPayloads[0].status, "succeeded");
 });
 
 test("입력 스키마 오류(job_id 존재) 시 failed 콜백 전송", async () => {

@@ -19,4 +19,3 @@ export interface StudentDTO {
     facSmrCnt: number; // 총 이수학기
     flangPassGb?: string; // 외국어 인증 (예: 통과/미통과)
   }
-  

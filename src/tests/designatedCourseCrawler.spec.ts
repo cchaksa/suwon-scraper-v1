@@ -39,7 +39,7 @@ function createPage(data: unknown, options: { ok?: boolean; status?: number; jso
   return { page, calls };
 }
 
-test("지정과목 API에 학번을 전달하고 precpSbjtList의 원본 필드를 보존한다", async () => {
+test("지정과목 API에 학번과 조직분류코드 20을 전달하고 precpSbjtList의 원본 필드를 보존한다", async () => {
   const courses = [
     { ...designatedCourse, extraPortalField: "원본 추가 필드" },
     { ...designatedCourse, subjtCd: "SUBJ002", subjtNm: "두 번째 지정과목" },
@@ -52,13 +52,14 @@ test("지정과목 API에 학번을 전달하고 precpSbjtList의 원본 필드�
   assert.deepEqual(result, courses);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do");
-  assert.deepEqual(calls[0].requestOptions.data, { sno: "24020044" });
+  assert.deepEqual(calls[0].requestOptions.data, { sno: "24020044", orgClsCd: "20" });
   assert.equal(calls[0].requestOptions.headers["Content-Type"], "application/json;charset=UTF-8");
 });
 
-test("명시적인 precpSbjtList 빈 배열은 정상 결과다", async () => {
-  const { page } = createPage({ precpSbjtList: [] });
+test("학부 코드로 조회한 명시적인 precpSbjtList 빈 배열은 정상 결과다", async () => {
+  const { page, calls } = createPage({ precpSbjtList: [] });
   assert.deepEqual(await scrapeDesignatedCourses(page, "24020044"), []);
+  assert.deepEqual(calls[0].requestOptions.data, { sno: "24020044", orgClsCd: "20" });
 });
 
 const invalidResponses = [

@@ -62,6 +62,8 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
 - `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
   - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
   - `POST /precpSbjt/listPrecpSbjt.do` 응답의 `precpSbjtList` 배열을 사용하며 항목의 추가 필드도 보존한다.
+  - 지정과목 수집은 학부 편입생 전용이며 요청 본문은 `{ sno: username, orgClsCd: "20" }`이다. `UNDERGRADUATE_ORG_CLASS_CODE` 상수로 학부 조회 조건을 명시한다. 학생 정보의 `orgClsCd` 필드는 요구하지 않는다.
+  - [포털 공식 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)의 `openSubjtPopUp`·`openSubjtGridPopUp`은 학부에 `"20"`, 대학원에 `"30"`을 사용한다. 대학원 지정과목 수집은 현재 지원 범위에 포함하지 않는다.
   - 편입생의 정상 빈 응답은 명시적인 `precpSbjtList: []`다. 키 누락·null·배열이 아닌 값·JSON 구문 오류는 빈 목록으로 대체하지 않고 전체 작업을 실패시킨다.
 
 지정과목 누락 수정 이전에 빈 목록이 저장된 계정은 수정 워커 배포 후 포털 재동기화가 필요하다. 배포만으로 기존 데이터가 복구되지는 않는다.

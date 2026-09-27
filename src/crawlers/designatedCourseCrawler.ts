@@ -4,6 +4,9 @@ import type { DesignatedCourseDTO } from "../dtos/DesignatedCourseDTO";
 import { ScrapeJobError } from "../services/scrapeErrors";
 import { logger } from "../utils/logger";
 
+// 학부 전용 조회 코드. 근거: https://info.suwon.ac.kr/js/sa/commSa.js의 openSubjtPopUp.
+const UNDERGRADUATE_ORG_CLASS_CODE = "20";
+
 const DESIGNATED_COURSE_HEADERS = {
   "Content-Type": "application/json;charset=UTF-8",
   Accept: "application/json",
@@ -15,7 +18,7 @@ const DESIGNATED_COURSE_HEADERS = {
 export async function scrapeDesignatedCourses(page: Page, username: string): Promise<DesignatedCourseDTO[]> {
   const response = await page.request.post("https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do", {
     headers: DESIGNATED_COURSE_HEADERS,
-    data: { sno: username },
+    data: { sno: username, orgClsCd: UNDERGRADUATE_ORG_CLASS_CODE },
   });
 
   logger.info(`Designated course response status:${username}`, response.status());

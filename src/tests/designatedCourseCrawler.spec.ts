@@ -39,7 +39,7 @@ function createPage(data: unknown, options: { ok?: boolean; status?: number; jso
   return { page, calls };
 }
 
-test("지정과목 API에 학번과 조직분류코드 20을 전달하고 precpSbjtList의 원본 필드를 보존한다", async () => {
+test("지정과목 API에 학번과 전달받은 조직분류코드를 보내고 precpSbjtList의 원본 필드를 보존한다", async () => {
   const courses = [
     { ...designatedCourse, extraPortalField: "원본 추가 필드" },
     { ...designatedCourse, subjtCd: "SUBJ002", subjtNm: "두 번째 지정과목" },
@@ -47,18 +47,32 @@ test("지정과목 API에 학번과 조직분류코드 20을 전달하고 precpS
   ];
   const { page, calls } = createPage({ precpSbjtList: courses });
 
-  const result = await scrapeDesignatedCourses(page, "24020044");
+  const result = await scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG");
 
   assert.deepEqual(result, courses);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do");
-  assert.deepEqual(calls[0].requestOptions.data, { sno: "24020044", orgClsCd: "20" });
+  assert.deepEqual(calls[0].requestOptions.data, { sno: "24020044", orgClsCd: "TEST_OTHER_ORG" });
   assert.equal(calls[0].requestOptions.headers["Content-Type"], "application/json;charset=UTF-8");
 });
 
-test("명시적인 precpSbjtList 빈 배열은 정상 결과다", async () => {
+test("유효한 조직분류코드로 조회한 명시적인 precpSbjtList 빈 배열은 정상 결과다", async () => {
   const { page } = createPage({ precpSbjtList: [] });
-  assert.deepEqual(await scrapeDesignatedCourses(page, "24020044"), []);
+  assert.deepEqual(await scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), []);
+});
+
+test("조직분류코드 누락이나 잘못된 값은 API 요청 없이 수집 오류로 처리한다", async () => {
+  for (const orgClsCd of [undefined, null, "", " \t\n", 20, {}, []]) {
+    const { page, calls } = createPage({ precpSbjtList: [] });
+    await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", orgClsCd as string | undefined), error => {
+      assert.ok(error instanceof ScrapeJobError);
+      assert.equal(error.errorCode, "PORTAL_RESPONSE_SCHEMA_MISMATCH");
+      assert.equal(error.retryable, false);
+      assert.equal(error.message, "학생 정보의 orgClsCd가 없거나 유효한 문자열이 아닙니다.");
+      return true;
+    });
+    assert.equal(calls.length, 0);
+  }
 });
 
 const invalidResponses = [
@@ -77,7 +91,7 @@ const invalidResponses = [
 for (const { name, data } of invalidResponses) {
   test(`${name}은 재시도 불가능한 지정과목 응답 형식 오류다`, async () => {
     const { page } = createPage(data);
-    await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+    await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), error => {
       assert.ok(error instanceof ScrapeJobError);
       assert.equal(error.errorCode, "PORTAL_RESPONSE_SCHEMA_MISMATCH");
       assert.equal(error.retryable, false);
@@ -89,7 +103,7 @@ for (const { name, data } of invalidResponses) {
 
 test("JSON 구문 오류는 응답 원문 없이 형식 오류로 전달한다", async () => {
   const { page } = createPage(undefined, { jsonError: new SyntaxError("Unexpected token: 비공개 응답 원문") });
-  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), error => {
     assert.ok(error instanceof ScrapeJobError);
     assert.equal(error.errorCode, "PORTAL_RESPONSE_SCHEMA_MISMATCH");
     assert.equal(error.retryable, false);
@@ -105,7 +119,7 @@ for (const [message, errorCode] of [
   test(`응답 본문을 읽는 중 ${message} 오류는 기존 재시도 정책을 유지한다`, async () => {
     const readError = new Error(message);
     const { page } = createPage(undefined, { jsonError: readError });
-    await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+    await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), error => {
       assert.equal(error, readError);
       assert.equal(classifyWorkerError(error).error_code, errorCode);
       assert.equal(classifyWorkerError(error).retryable, true);
@@ -117,7 +131,7 @@ for (const [message, errorCode] of [
 test("지정과목 API 5xx 응답은 재시도 가능한 일시 오류를 던진다", async () => {
   const { page } = createPage({}, { ok: false, status: 503 });
 
-  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), error => {
     assert.ok(error instanceof ScrapeJobError);
     assert.equal(error.errorCode, "PORTAL_TEMPORARY_UNAVAILABLE");
     assert.equal(error.retryable, true);
@@ -129,7 +143,7 @@ test("지정과목 API 5xx 응답은 재시도 가능한 일시 오류를 던진
 test("지정과목 API 4xx 응답은 기존 상태 코드 오류를 유지한다", async () => {
   const { page } = createPage({}, { ok: false, status: 400 });
 
-  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044"), error => {
+  await assert.rejects(() => scrapeDesignatedCourses(page, "24020044", "TEST_OTHER_ORG"), error => {
     assert.ok(!(error instanceof ScrapeJobError));
     assert.match(error instanceof Error ? error.message : String(error), /Failed to fetch designated courses: 400/);
     return true;

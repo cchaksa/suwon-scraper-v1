@@ -5,24 +5,38 @@ import { ScrapeJobError } from "../services/scrapeErrors";
 import { ResultStorageError, type ResultStorageClient, type StoredResultDescriptor } from "../services/resultStorage";
 import type { WorkerCallbackPayload } from "../types/worker";
 import type { Page } from "playwright-core";
-import type { StudentDTO } from "../dtos/StudentDTO";
+import { scrapeStudent } from "../crawlers/studentCrawler";
 import { scrapeDesignatedCourses } from "../crawlers/designatedCourseCrawler";
 import { scrapeAuthenticatedData } from "../services/scrapeJob";
 
-function createPortalScrapeFn(designatedResponse: unknown): WorkerRuntimeDeps["scrapeFn"] {
+function createPortalScrapeFn(
+  designatedResponse: unknown,
+  studentFields: Record<string, unknown> = { orgClsCd: "TEST_OTHER_ORG" }
+): WorkerRuntimeDeps["scrapeFn"] {
   return async ({ username }) => {
     const page = {
       request: {
-        post: async () => ({
-          ok: () => true,
-          status: () => 200,
-          json: async () => designatedResponse,
-        }),
+        post: async (url: string, options: { data: unknown }) => {
+          if (url === "https://info.suwon.ac.kr/scrgBas/selectScrgBas.do") {
+            return {
+              ok: () => true,
+              status: () => 200,
+              json: async () => ({ studentInfo: { sno: username, enscDvcd: "2", orgCd: "TEST_DEPARTMENT", ...studentFields } }),
+            };
+          }
+          assert.equal(url, "https://info.suwon.ac.kr/precpSbjt/listPrecpSbjt.do");
+          assert.deepEqual(options.data, { sno: username, orgClsCd: studentFields.orgClsCd });
+          return {
+            ok: () => true,
+            status: () => 200,
+            json: async () => designatedResponse,
+          };
+        },
       },
     } as unknown as Page;
 
     return scrapeAuthenticatedData(page, username, {
-      scrapeStudent: async () => ({ sno: username, enscDvcd: "2" } as StudentDTO),
+      scrapeStudent,
       scrapeCourses: async () => [],
       scrapeCredits: async () => ({
         creditDTOs: [],
@@ -185,6 +199,7 @@ test("포털 precpSbjtList의 지정과목 3개가 S3 저장 payload까지 보�
   assert.equal(await runWorkerMessage(raw, createConfig(), deps), 0);
   assert.equal(getStoredPayloads().length, 1);
   assert.deepEqual((getStoredPayloads()[0] as { designatedCourses: unknown[] }).designatedCourses, designatedCourses);
+  assert.equal((getStoredPayloads()[0] as { student: { orgClsCd: string } }).student.orgClsCd, "TEST_OTHER_ORG");
   assert.equal(callbackPayloads.length, 1);
   assert.equal(callbackPayloads[0].status, "succeeded");
 });
@@ -212,6 +227,32 @@ test("지정과목 응답 키 오류는 S3 저장 없이 재시도 불가 실패
     retryable: false,
     finished_at: "2026-03-03T12:00:00.000Z",
   }]);
+});
+
+test("편입생 학생 정보의 조직분류코드가 유효하지 않으면 S3 저장 없이 실패 콜백을 보낸다", async () => {
+  for (const orgClsCd of [undefined, null, "", " \t\n", 20, {}, []]) {
+    const { deps, callbackPayloads, getStoredPayloads } = createDeps({
+      scrapeFn: createPortalScrapeFn({ precpSbjtList: [] }, { orgClsCd }),
+    });
+    const raw = JSON.stringify({
+      job_id: "job-student-org-code-invalid",
+      user_id: "user-1",
+      portal_type: "suwon",
+      request_payload: { username: "17019013", password: "pw" },
+      requested_at: "2026-03-03T10:00:00.000Z",
+    });
+
+    assert.equal(await runWorkerMessage(raw, createConfig(), deps), 1);
+    assert.equal(getStoredPayloads().length, 0);
+    assert.deepEqual(callbackPayloads, [{
+      job_id: "job-student-org-code-invalid",
+      status: "failed",
+      error_code: "PORTAL_RESPONSE_SCHEMA_MISMATCH",
+      error_message: "학생 정보의 orgClsCd가 없거나 유효한 문자열이 아닙니다.",
+      retryable: false,
+      finished_at: "2026-03-03T12:00:00.000Z",
+    }]);
+  }
 });
 
 test("입력 스키마 오류(job_id 존재) 시 failed 콜백 전송", async () => {

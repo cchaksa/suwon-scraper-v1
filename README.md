@@ -1,6 +1,6 @@
 # Suwon Scraper
 
-suwon-scraper는 수원대학교 포털 및 학사 시스템 데이터를 크롤링하여 학생의 기본정보, 수강 내역, 성적 정보를 수집하고 가공하는 Node.js 기반의 웹 크롤러입니다. AWS ECS에서 Docker를 이용해 컨테이너로 배포하여 실행할 수 있습니다.
+suwon-scraper는 수원대학교 포털 및 학사 시스템 데이터를 크롤링하여 학생의 기본정보, 수강 내역, 성적 정보, 편입생 지정과목을 수집하고 가공하는 Node.js 기반의 웹 크롤러입니다. AWS ECS에서 Docker를 이용해 컨테이너로 배포하여 실행할 수 있습니다.
 
 suwon-scraper는 GitHub Actions를 활용하여 Amazon ECS에 배포됩니다. 배포는 자동 push 트리거가 아니라 GitHub Actions 수동 실행으로만 수행하며, 실행 화면에서 배포할 브랜치를 선택합니다.
 
@@ -9,6 +9,7 @@ suwon-scraper는 GitHub Actions를 활용하여 Amazon ECS에 배포됩니다. �
 - 학생 기본 정보 크롤링
 - 학기별 성적 및 학점 크롤링
 - 수강한 과목 세부 정보 크롤링
+- 편입생 지정과목 조건부 크롤링
 - ECS RunTask 1회 실행 비동기 워커
 - 결과 콜백 전송(`POST /internal/scrape-results`)
 
@@ -47,6 +48,25 @@ TypeScript, Node.js, Playwright, Docker, AWS ECS
   - 백엔드는 해당 키를 이용해 원본 JSON을 재다운로드한다.
 - 실패 콜백은 기존과 동일하게 `error_code`, `error_message`, `retryable` 값을 전달한다.
 - S3 업로드에 실패하면 워커는 `RESULT_UPLOAD_FAILED` 오류로 콜백한다.
+- 지정과목 응답 형식이 잘못되면 `PORTAL_RESPONSE_SCHEMA_MISMATCH`, `retryable: false`로 실패 콜백을 전송하고 S3 결과를 저장하지 않는다. 실패 콜백의 전송 재시도 정책은 유지한다.
+
+### S3 스크래핑 원문 구조
+
+- `student`: 학생 기본 정보.
+  - `enscDvcd`: 포털의 입학 구분 코드 원본값이다. `"2"`이면 편입생이며 지정과목 API의 조건부 호출 기준으로 사용한다.
+  - `flangPassGb`: 포털의 외국어 인증 상태 원본 문자열이다. 스크래퍼는 값을 해석하거나 변환하지 않는다. 포털 응답에 필드가 없으면 `undefined`를 유지하며, S3에 저장되는 JSON에서는 해당 속성이 생략된다.
+- `semesters`: 학기별 수강·성적 병합 결과.
+  - `courses[].point`: 백엔드가 학점 계산에 사용할 최종 반영 학점이다. 수강 데이터의 non-null `point`를 우선하고, 해당 값이 없으며 성적 `gainPoint`가 있으면 `gainPoint`로 보정한다. 성적 데이터만 존재하는 과목에도 같은 보정을 적용한다.
+  - `courses[].gainPoint`: 포털 성적 데이터의 취득·인정 학점 원본값이며 `point` 보정의 근거다. 최신 성적 데이터에 이 필드가 없으면 이전 값을 잔존시키지 않는다.
+- `academicRecords`: 학기별·누적 성적 요약.
+- `designatedCourses`: 편입생 지정과목 배열. 비편입생과 정상 빈 응답에서는 `[]`다.
+  - 항목은 `orgClsCd`, `subjtCd`, `subjtNm`, `point`, `precpResnCd`, `cretGainYear`, `cretSmrNm`, `sno`를 포함한다.
+  - `POST /precpSbjt/listPrecpSbjt.do` 응답의 `precpSbjtList` 배열을 사용하며 항목의 추가 필드도 보존한다.
+  - 지정과목 수집은 학부 편입생 전용이며 요청 본문은 `{ sno: username, orgClsCd: "20" }`이다. `UNDERGRADUATE_ORG_CLASS_CODE` 상수로 학부 조회 조건을 명시한다. 학생 정보의 `orgClsCd` 필드는 요구하지 않는다.
+  - [포털 공식 공통 교과목 스크립트](https://info.suwon.ac.kr/js/sa/commSa.js)의 `openSubjtPopUp`·`openSubjtGridPopUp`은 학부에 `"20"`, 대학원에 `"30"`을 사용한다. 대학원 지정과목 수집은 현재 지원 범위에 포함하지 않는다.
+  - 편입생의 정상 빈 응답은 명시적인 `precpSbjtList: []`다. 키 누락·null·배열이 아닌 값·JSON 구문 오류는 빈 목록으로 대체하지 않고 전체 작업을 실패시킨다.
+
+지정과목 누락 수정 이전에 빈 목록이 저장된 계정은 수정 워커 배포 후 포털 재동기화가 필요하다. 배포만으로 기존 데이터가 복구되지는 않는다.
 
 ### legacy API 엔드포인트 (`start:server` 실행 시)
 
